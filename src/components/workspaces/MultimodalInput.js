@@ -1,0 +1,54 @@
+"use client";
+
+import React from "react";
+import { Upload, Link as LinkIcon, Sparkles } from "lucide-react";
+
+export default function MultimodalInput() {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+        <h3 className="font-semibold text-slate-800 flex items-center gap-2">
+          1. Context (Brain)
+        </h3>
+        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-emerald-100/50 text-emerald-700 rounded border border-emerald-200/50">
+          Gemini 1.5 Flash
+        </span>
+      </div>
+      <div className="p-4 flex-1 overflow-y-auto">
+        <textarea 
+          className="w-full min-h-[140px] p-3 border border-slate-200 rounded-lg text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none shadow-inner bg-slate-50/50"
+          placeholder="Paste your syllabus, link to a Google Doc, or describe your project goals..."
+          defaultValue={"I need to write my final Thesis Intro by Friday. It will take a lot of deep focus. Also need to review chapters 4-6 for Biology, which is easier but tedious."}
+        />
+        
+        {/* Suggestion Chips */}
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <button className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+            Draft Study Plan
+          </button>
+          <button className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+            Schedule 1hr Focus
+          </button>
+          <button className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+            Break down Canvas Link
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
+          <div className="flex items-center gap-1">
+            <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors group relative" title="Upload File">
+              <Upload size={16} />
+            </button>
+            <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors group relative" title="Attach Link">
+              <LinkIcon size={16} />
+            </button>
+          </div>
+          <button className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-all shadow-md hover:shadow-lg flex items-center gap-2 group">
+            Analyze
+            <Sparkles size={16} className="text-emerald-400 group-hover:animate-pulse" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

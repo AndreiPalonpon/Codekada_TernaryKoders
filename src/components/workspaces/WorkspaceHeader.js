@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon } from "lucide-react";
+import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check } from "lucide-react";
+import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 export default function WorkspaceHeader({ 
   title = "Workspace", 
@@ -12,6 +13,34 @@ export default function WorkspaceHeader({
 }) {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteStatus, setInviteStatus] = useState(null); // null | "sending" | "sent"
+
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const inviteMember = useWorkspaceStore((state) => state.inviteMember);
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
+
+    setInviteStatus("sending");
+    const success = await inviteMember(activeWorkspaceId || "ws_8f92a", inviteEmail.trim());
+
+    if (success) {
+      setInviteStatus("sent");
+      setTimeout(() => {
+        setInviteEmail("");
+        setInviteStatus(null);
+      }, 2000);
+    } else {
+      setInviteStatus(null);
+    }
+  };
+
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/workspace?invite=${activeWorkspaceId || "ws_8f92a"}`;
+    navigator.clipboard.writeText(link);
+    alert("Invite link copied to clipboard!");
+  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center px-8 justify-between shrink-0 shadow-sm z-10">
@@ -84,7 +113,7 @@ export default function WorkspaceHeader({
               Share
             </button>
 
-            {/* Extensible Share Popover */}
+            {/* Share Popover with functional Invite */}
             {isShareMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsShareMenuOpen(false)}></div>
@@ -93,8 +122,21 @@ export default function WorkspaceHeader({
                   <p className="text-xs text-slate-500 mb-4">Invite your team members to collaborate.</p>
                   
                   <div className="flex gap-2 mb-4">
-                    <input type="email" placeholder="Email address" className="flex-1 text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" />
-                    <button className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">Invite</button>
+                    <input
+                      type="email"
+                      placeholder="Email address"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                      className="flex-1 text-sm px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                    />
+                    <button
+                      onClick={handleInvite}
+                      disabled={inviteStatus === "sending" || !inviteEmail.trim()}
+                      className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
+                    >
+                      {inviteStatus === "sent" ? <><Check size={14} /> Sent!</> : inviteStatus === "sending" ? "Sending..." : "Invite"}
+                    </button>
                   </div>
 
                   <div className="space-y-3">
@@ -109,7 +151,10 @@ export default function WorkspaceHeader({
                   </div>
 
                   <div className="mt-5 pt-3 border-t border-slate-100">
-                    <button className="w-full py-2 flex items-center justify-center gap-2 text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
+                    <button
+                      onClick={handleCopyLink}
+                      className="w-full py-2 flex items-center justify-center gap-2 text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
+                    >
                       <LinkIcon size={14} /> Copy Invite Link
                     </button>
                   </div>

@@ -41,6 +41,7 @@ const GENERATION_CONFIG = {
 };
 
 // The system instruction that defines the AI's role in the pipeline.
+// Date context is injected dynamically via _buildContextPreamble().
 const SYSTEM_INSTRUCTION = `
 You are the analytical "Brain" of SyncForge, a collaborative scheduling assistant.
 
@@ -48,12 +49,34 @@ Your ONLY job is to extract tasks from the user's input and classify each one us
 the structured JSON schema provided. You must map every task to the provided
 workspace_id and assigned_to user ID exactly as given — do not invent or alter IDs.
 
+IMPORTANT — TEMPORAL RESOLUTION RULES:
+You will receive the current date, day of week, and timezone in the context preamble.
+You MUST use this to resolve ALL relative time references into absolute ISO 8601 dates.
+
+Examples of resolution (assuming today is Wednesday 2026-05-06):
+  - "next Monday"     → start_after: "2026-05-11", deadline: "2026-05-11"
+  - "on Thursday"     → start_after: "2026-05-07", deadline: "2026-05-07"
+  - "by Friday"       → deadline: "2026-05-08"
+  - "2 days before X" → deadline must be 2 days before X's start_after date
+
+DEPENDENCY & PREREQUISITE RULES:
+When the user says "review at least N days prior to [event]", you MUST:
+  1. Create the main event task with its resolved absolute dates.
+  2. Create a SEPARATE prerequisite "review" task whose deadline is N days BEFORE the
+     main event's start_after date.
+  3. Set the review task's depends_on field to null and the main event can depend on the review.
+  4. Set the review task's priority to P1 (most urgent) since it must happen first.
+
 For each task you extract, determine:
 - task_name:          A short, clear name for the task.
 - estimated_minutes:  Your best estimate of how long this task will take (integer).
 - cognitive_load:     One of "Low", "Medium", or "High", based on complexity.
 - preferred_window:   One of "Morning", "Afternoon", or "Night", based on task type.
 - splittable:         true if the task can be broken into multiple time blocks, false otherwise.
+- start_after:        ISO 8601 date string (e.g. "2026-05-11") — earliest date this task may be scheduled. null if unconstrained.
+- deadline:           ISO 8601 date string — latest date by which this task must be completed. null if unconstrained.
+- priority:           P1 (urgent/prerequisite) through P4 (low). Default P3.
+- depends_on:         task_name of a prerequisite task, or null.
 
 If the user's input contains no actionable tasks, return an empty array [].
 Do NOT include any extra keys, explanations, or commentary — only valid JSON.
@@ -207,7 +230,15 @@ class MultimodalGeminiAdapter extends IAIService {
    * @returns {string}
    */
   _buildContextPreamble(workspaceId, assignedTo, userPreferences) {
+    const now = new Date();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDay = dayNames[now.getDay()];
+    const isoDate = now.toISOString().slice(0, 10);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
     return [
+      `Current Date: ${isoDate} (${currentDay})`,
+      `Timezone: ${timezone}`,
       `Workspace ID: ${workspaceId}`,
       `Assigned To (User ID): ${assignedTo}`,
       `User Preferences: ${JSON.stringify(userPreferences)}`,

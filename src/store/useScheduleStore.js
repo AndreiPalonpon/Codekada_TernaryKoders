@@ -7,6 +7,9 @@ import { create } from "zustand";
  * and CalendarView (reads events). The generateSchedule action POSTs
  * to the backend orchestrator and maps the response into FullCalendar-
  * compatible event objects.
+ *
+ * Secondary actions handle recalculation (snooze, complete, delete)
+ * and local UI state (filters, clearing).
  */
 const useScheduleStore = create((set, get) => ({
 
@@ -14,13 +17,29 @@ const useScheduleStore = create((set, get) => ({
   // State
   // ---------------------------------------------------------------------------
 
+  /** FullCalendar-compatible event objects rendered on the calendar. */
   events: [],
+
+  /** Raw text bound to the multimodal input textarea. */
   textInput: "",
+
+  /** AI Phase 1 parsed task metadata (shown in TaskBreakdown table). */
+  aiParsedTasks: [],
+
+  /** True while the generation pipeline is running. */
   isLoading: false,
+
+  /** True while a recalculation (snooze/complete/delete) is in progress. */
+  isRecalculating: false,
+
+  /** Error object from the last failed operation, or null. */
   error: null,
 
+  /** Active cognitive-load filter: null = show all, or "High" | "Medium" | "Low". */
+  activeFilter: null,
+
   // ---------------------------------------------------------------------------
-  // Actions
+  // Primary Actions
   // ---------------------------------------------------------------------------
 
   /** Update the raw text input bound to the <textarea>. */
@@ -34,8 +53,8 @@ const useScheduleStore = create((set, get) => ({
    *   - inputs        : array of { type, content } objects
    *   - user_preferences : MVP-hardcoded scheduling preferences
    *
-   * On success (result.success === true) the response data is mapped to
-   * the `events` array. On failure the `error` state is populated.
+   * On success the response populates both `events` (calendar) and
+   * `aiParsedTasks` (TaskBreakdown table). On failure `error` is set.
    *
    * @param {string} workspaceId - Workspace identifier (default "ws_8f92a").
    */
@@ -52,7 +71,7 @@ const useScheduleStore = create((set, get) => ({
           workspace_id: workspaceId,
           inputs: [{ type: "text", content: textInput }],
           user_preferences: {
-            deep_work_hours: ["09:00", "11:00"],
+            deep_work_hours: ["09:00", "17:00"],
             max_daily_load_minutes: 240,
           },
         }),
@@ -61,7 +80,10 @@ const useScheduleStore = create((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
-        set({ events: result.data });
+        set({
+          events: result.data,
+          aiParsedTasks: result.meta?.ai_tasks || [],
+        });
       } else {
         set({ error: result.error });
       }
@@ -75,6 +97,126 @@ const useScheduleStore = create((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  // ---------------------------------------------------------------------------
+  // Secondary Actions (Recalculation / Task Mutations)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Snoozes a task by pushing it forward by `delayMinutes`.
+   * Calls PATCH /api/schedule/recalculate, then falls back to a local
+   * optimistic removal if the backend is unavailable (MVP mode).
+   *
+   * @param {string} taskId       - The event ID to snooze.
+   * @param {number} delayMinutes - Minutes to delay (default 30).
+   */
+  snoozeTask: async (taskId, delayMinutes = 30) => {
+    set({ isRecalculating: true, error: null });
+
+    try {
+      const response = await fetch("/api/schedule/recalculate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace_id: "ws_8f92a",
+          interrupted_task_id: taskId,
+          action: "snooze",
+          delay_minutes: delayMinutes,
+          busy_blocks: [{ busy: [] }],
+          triggered_by: "user_mvp",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data?.scheduled) {
+        // Backend returned a fresh schedule — replace events.
+        set({ events: result.data.scheduled });
+      } else {
+        // Optimistic local fallback: remove the snoozed event from the UI.
+        const { events } = get();
+        set({ events: events.filter((e) => e.id !== taskId) });
+      }
+    } catch {
+      // Offline / no DB — optimistic local removal.
+      const { events } = get();
+      set({ events: events.filter((e) => e.id !== taskId) });
+    } finally {
+      set({ isRecalculating: false });
+    }
+  },
+
+  /**
+   * Marks a task as completed and removes it from the calendar.
+   * @param {string} taskId - The event ID to complete.
+   */
+  markTaskComplete: async (taskId) => {
+    set({ isRecalculating: true, error: null });
+
+    try {
+      await fetch("/api/schedule/recalculate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace_id: "ws_8f92a",
+          interrupted_task_id: taskId,
+          action: "missed",          // Reuses "missed" to clear blocks; status updated locally.
+          delay_minutes: 0,
+          busy_blocks: [{ busy: [] }],
+          triggered_by: "user_mvp",
+        }),
+      });
+    } catch {
+      // Best-effort — continue with optimistic removal below.
+    }
+
+    // Optimistic removal regardless of backend response.
+    const { events } = get();
+    set({
+      events: events.filter((e) => e.id !== taskId),
+      isRecalculating: false,
+    });
+  },
+
+  /**
+   * Deletes a task entirely from the calendar.
+   * @param {string} taskId - The event ID to delete.
+   */
+  deleteTask: (taskId) => {
+    const { events } = get();
+    set({ events: events.filter((e) => e.id !== taskId) });
+  },
+
+  /**
+   * Clears all events and AI-parsed tasks from the store.
+   * Resets the schedule to a blank state.
+   */
+  clearSchedule: () => {
+    set({ events: [], aiParsedTasks: [], error: null });
+  },
+
+  // ---------------------------------------------------------------------------
+  // UI Filter Actions
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Sets the active cognitive-load filter.
+   * @param {string|null} filterType - "High", "Medium", "Low", or null for all.
+   */
+  setFilter: (filterType) => set({ activeFilter: filterType }),
+
+  /**
+   * Returns the currently visible events, respecting the active filter.
+   * Components should call this instead of reading `events` directly
+   * when they need filtered results.
+   */
+  getFilteredEvents: () => {
+    const { events, activeFilter } = get();
+    if (!activeFilter) return events;
+    return events.filter(
+      (e) => e.extendedProps?.cognitive_load === activeFilter
+    );
   },
 }));
 

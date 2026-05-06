@@ -38,11 +38,28 @@ const GENERATION_OPTIONS = {
   num_predict: 1200,  // Max token output limit (safeguard).
 };
 
-// System instruction that forces nested schema output with an explicit mockup
+// System instruction that forces nested schema output with temporal resolution
 const SYSTEM_INSTRUCTION = `
 You are the analytical "Brain" of SyncForge, a collaborative scheduling assistant.
 
 Your ONLY job is to extract tasks from the user's input and classify each one using the structured JSON schema.
+
+IMPORTANT — TEMPORAL RESOLUTION RULES:
+You will receive the current date, day of week, and timezone in the context preamble.
+You MUST use this to resolve ALL relative time references into absolute ISO 8601 dates.
+
+Examples of resolution (assuming today is Wednesday 2026-05-06):
+  - "next Monday"     → start_after: "2026-05-11", deadline: "2026-05-11"
+  - "on Thursday"     → start_after: "2026-05-07", deadline: "2026-05-07"
+  - "by Friday"       → deadline: "2026-05-08"
+  - "2 days before X" → deadline must be 2 days before X's start_after date
+
+DEPENDENCY & PREREQUISITE RULES:
+When the user says "review at least N days prior to [event]", you MUST:
+  1. Create the main event task with its resolved absolute dates.
+  2. Create a SEPARATE prerequisite "review" task whose deadline is N days BEFORE the
+     main event's start_after date.
+  3. Set the review task's priority to P1 (most urgent) since it must happen first.
 
 The output MUST be a JSON array of objects, where each object has this EXACT nested structure:
 {
@@ -50,10 +67,14 @@ The output MUST be a JSON array of objects, where each object has this EXACT nes
   "assigned_to": "provided assigned_to user ID string",
   "metadata": {
     "task_name": "A short, clear name for the task",
-    "estimated_minutes": your best estimate of duration in minutes (integer),
-    "cognitive_load": "Low", "Medium", or "High" (based on complexity),
-    "preferred_window": "Morning", "Afternoon", or "Night" (based on task type),
-    "splittable": true or false (true if the task can be broken into multiple blocks, false otherwise)
+    "estimated_minutes": integer,
+    "cognitive_load": "Low" | "Medium" | "High",
+    "preferred_window": "Morning" | "Afternoon" | "Night",
+    "splittable": true or false,
+    "start_after": "ISO 8601 date or null",
+    "deadline": "ISO 8601 date or null",
+    "priority": "P1" | "P2" | "P3" | "P4",
+    "depends_on": "task_name of prerequisite task, or null"
   }
 }
 
@@ -181,7 +202,15 @@ class OllamaGemmaAdapter extends IAIService {
    * @returns {string}
    */
   _buildContextPreamble(workspaceId, assignedTo, userPreferences) {
+    const now = new Date();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const currentDay = dayNames[now.getDay()];
+    const isoDate = now.toISOString().slice(0, 10);
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
     return [
+      `Current Date: ${isoDate} (${currentDay})`,
+      `Timezone: ${timezone}`,
       `Workspace ID: ${workspaceId}`,
       `Assigned To (User ID): ${assignedTo}`,
       `User Preferences: ${JSON.stringify(userPreferences)}`,

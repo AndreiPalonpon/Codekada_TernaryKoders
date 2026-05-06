@@ -9,18 +9,21 @@ import ISchedulerEngine from './ISchedulerEngine.js';
  * It works for 1 to N users. For MVP, N = 1 (single user). When MULTI_USER_ENABLED is true,
  * N > 1 and the engine finds overlapping free windows across all team members' calendars.
  *
- * Algorithm: Greedy Bin-Packing
+ * Algorithm: Greedy Bin-Packing with Chronological Constraints
  * - Merges busy blocks from all user calendars.
  * - Generates free "bins" within each user's working hours.
- * - Sorts tasks by priority (P1 first) and due_date to ensure urgent work gets scheduled first.
- * - Fits tasks into the earliest matching free bin. Splits splittable tasks if needed.
+ * - Sorts tasks by deadline urgency (earliest deadline first), then priority.
+ * - Fits tasks into the earliest VALID free bin, strictly respecting:
+ *     • start_after — bins before this date are skipped.
+ *     • deadline    — bins after this date are excluded.
+ * - Splits splittable tasks if needed.
  */
 class NUserBinPacking extends ISchedulerEngine {
 
   /**
-   * @param {number} [lookAheadDays=7] - How many days ahead to search for free time.
+   * @param {number} [lookAheadDays=14] - How many days ahead to search for free time.
    */
-  constructor(lookAheadDays = 7) {
+  constructor(lookAheadDays = 14) {
     super();
     this.lookAheadDays = lookAheadDays;
   }
@@ -32,7 +35,7 @@ class NUserBinPacking extends ISchedulerEngine {
   /**
    * Main entry point. Schedules all tasks into free calendar bins.
    *
-   * @param {Array<Object>} tasks      - Array of Task documents (from Mongoose).
+   * @param {Array<Object>} tasks      - Array of Task documents (from Mongoose or AI output).
    * @param {Array<Object>} calendars  - Array of { busy: [{ start, end }] } objects, one per user.
    * @param {Object}        userPrefs  - { work_day_start, work_day_end, timezone, deep_work_max_minutes, buffer_minutes }
    * @returns {{ scheduled: Array, unscheduled: Array, full: boolean }}
@@ -66,10 +69,11 @@ class NUserBinPacking extends ISchedulerEngine {
       return { scheduled: [], unscheduled: tasks, full: true };
     }
 
-    // Step 3: Sort tasks by urgency (P1 > P2 > P3 > P4, then by due_date).
+    // Step 3: Sort tasks by deadline urgency, then by priority.
     const sortedTasks = this._sortTasksByUrgency(tasks);
 
-    // Step 4: Greedily fit each task into the earliest matching free bin.
+    // Step 4: Greedily fit each task into the earliest VALID free bin,
+    //         respecting start_after and deadline constraints.
     const scheduled = [];
     const unscheduled = [];
 
@@ -185,35 +189,66 @@ class NUserBinPacking extends ISchedulerEngine {
   }
 
   /**
-   * Sorts tasks with P1 (most urgent) first. Tasks with due_dates take precedence over those without.
+   * Sorts tasks by deadline urgency first (earliest deadlines scheduled first),
+   * then by priority weight (P1 > P2 > P3 > P4).
+   *
+   * Tasks with deadlines always come before tasks without deadlines,
+   * ensuring time-constrained work gets the best bin placement.
    */
   _sortTasksByUrgency(tasks) {
     const priorityWeight = { P1: 1, P2: 2, P3: 3, P4: 4 };
 
     return [...tasks].sort((a, b) => {
+      const deadlineA = a.metadata?.deadline ? new Date(a.metadata.deadline) : null;
+      const deadlineB = b.metadata?.deadline ? new Date(b.metadata.deadline) : null;
+
+      // Tasks with deadlines go before tasks without deadlines.
+      if (deadlineA && !deadlineB) return -1;
+      if (!deadlineA && deadlineB) return 1;
+
+      // Both have deadlines: earlier deadline first.
+      if (deadlineA && deadlineB) {
+        const diff = deadlineA - deadlineB;
+        if (diff !== 0) return diff;
+      }
+
+      // Same deadline (or both null): sort by priority.
       const pA = priorityWeight[a.metadata?.priority] ?? 3;
       const pB = priorityWeight[b.metadata?.priority] ?? 3;
-
       if (pA !== pB) return pA - pB;
 
-      // Same priority — prefer tasks with sooner due dates.
-      const dA = a.metadata?.due_date ? new Date(a.metadata.due_date) : Infinity;
-      const dB = b.metadata?.due_date ? new Date(b.metadata.due_date) : Infinity;
-      return dA - dB;
+      // Same priority — prefer tasks with sooner start_after dates.
+      const sA = a.metadata?.start_after ? new Date(a.metadata.start_after) : new Date(0);
+      const sB = b.metadata?.start_after ? new Date(b.metadata.start_after) : new Date(0);
+      return sA - sB;
     });
   }
 
   /**
-   * Greedily fits a single task into the earliest available free bins.
-   * For splittable tasks, it can span across multiple bins.
+   * Greedily fits a single task into the earliest available free bin that
+   * falls within the task's [start_after, deadline] window.
+   *
+   * For splittable tasks, it can span across multiple valid bins.
    * For non-splittable tasks, it finds the first single bin large enough.
    *
    * Enforces the deep_work_max_minutes cap per block.
+   *
+   * CHRONOLOGICAL CONSTRAINTS:
+   * - If task.metadata.start_after is set, bins ending before that date are skipped.
+   * - If task.metadata.deadline is set, bins starting after that date are excluded.
    */
   _fitTaskIntoBins(task, freeBins, deepWorkMaxMinutes, bufferMinutes) {
     const needed = task.metadata?.estimated_minutes ?? 0;
     const splittable = task.metadata?.splittable ?? false;
     const isCognitivelyHeavy = task.metadata?.cognitive_load === 'High';
+
+    // Parse chronological constraints from the AI's output.
+    const startAfter = task.metadata?.start_after
+      ? this._toStartOfDay(task.metadata.start_after)
+      : null;
+    const deadline = task.metadata?.deadline
+      ? this._toEndOfDay(task.metadata.deadline)
+      : null;
 
     // For High cognitive load, cap each block at deep_work_max_minutes.
     const maxBlockSize = isCognitivelyHeavy ? deepWorkMaxMinutes : Infinity;
@@ -227,15 +262,45 @@ class NUserBinPacking extends ISchedulerEngine {
       // Skip bins with no remaining capacity.
       if (bin.remainingMinutes <= bufferMinutes) continue;
 
-      const canFitInBin = Math.min(bin.remainingMinutes, maxBlockSize, remainingMinutes);
+      // ── CHRONOLOGICAL CONSTRAINT: start_after ──
+      // If the task cannot start before a certain date, skip bins that end
+      // before that date (they're too early).
+      if (startAfter && bin.end <= startAfter) {
+        continue;
+      }
+
+      // ── CHRONOLOGICAL CONSTRAINT: deadline ──
+      // If the task must be completed by a certain date, skip bins that start
+      // after that date (they're too late).
+      if (deadline && bin.start >= deadline) {
+        continue;
+      }
+
+      // Determine the effective start of this bin, respecting start_after.
+      // If start_after falls mid-bin, we can only use the portion after it.
+      let effectiveBinStart = new Date(bin.end.getTime() - bin.remainingMinutes * 60000);
+      if (startAfter && effectiveBinStart < startAfter) {
+        effectiveBinStart = new Date(Math.max(effectiveBinStart.getTime(), startAfter.getTime()));
+      }
+
+      // Determine the effective end of this bin, respecting deadline.
+      let effectiveBinEnd = bin.end;
+      if (deadline && effectiveBinEnd > deadline) {
+        effectiveBinEnd = new Date(Math.min(effectiveBinEnd.getTime(), deadline.getTime()));
+      }
+
+      const effectiveMinutes = (effectiveBinEnd - effectiveBinStart) / 60000;
+      if (effectiveMinutes <= bufferMinutes) continue;
+
+      const canFitInBin = Math.min(effectiveMinutes, maxBlockSize, remainingMinutes);
 
       if (!splittable && canFitInBin < remainingMinutes) {
         // Non-splittable: this bin is too small, keep looking.
         continue;
       }
 
-      // Carve out the block from the front of this bin.
-      const blockStart = new Date(bin.end.getTime() - bin.remainingMinutes * 60000);
+      // Carve out the block from the effective start of this bin.
+      const blockStart = effectiveBinStart;
       const blockEnd = addMinutes(blockStart, canFitInBin);
 
       blocks.push({
@@ -244,7 +309,9 @@ class NUserBinPacking extends ISchedulerEngine {
         calendar_event_id: null, // Will be filled by the Google Calendar adapter.
       });
 
-      bin.remainingMinutes -= canFitInBin;
+      // Reduce the bin's remaining capacity by the full amount consumed.
+      const consumedFromBin = (blockEnd - new Date(bin.end.getTime() - bin.remainingMinutes * 60000)) / 60000;
+      bin.remainingMinutes -= Math.max(consumedFromBin, canFitInBin);
       remainingMinutes -= canFitInBin;
 
       if (!splittable) break; // Non-splittable: one block is enough once found.
@@ -256,6 +323,36 @@ class NUserBinPacking extends ISchedulerEngine {
     }
 
     return { blocks };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Date Utility Helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Converts an ISO date string to the start of that day (00:00:00).
+   * This ensures start_after comparisons include the entire target day.
+   * @param {string} isoDate - e.g. "2026-05-11"
+   * @returns {Date}
+   */
+  _toStartOfDay(isoDate) {
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return null;
+    return startOfDay(d);
+  }
+
+  /**
+   * Converts an ISO date string to the end of that day (23:59:59.999).
+   * This ensures deadline comparisons include the entire target day.
+   * @param {string} isoDate - e.g. "2026-05-09"
+   * @returns {Date}
+   */
+  _toEndOfDay(isoDate) {
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return null;
+    const end = startOfDay(d);
+    end.setHours(23, 59, 59, 999);
+    return end;
   }
 }
 

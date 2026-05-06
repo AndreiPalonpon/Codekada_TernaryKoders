@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical } from "lucide-react";
-import { dummyEnvironments as fallbackEnvs } from "@/lib/dummyData";
+import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical, Plus } from "lucide-react";
 import { FolderKanban, CalendarDays } from "lucide-react";
+import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 // Helper to render dynamic icons
 const renderIcon = (iconName, props) => {
@@ -14,13 +14,24 @@ const renderIcon = (iconName, props) => {
 export default function WorkspaceSidebar({ 
   isExpanded, 
   setIsExpanded, 
-  environments = fallbackEnvs,
   // Extensibility props: inject arbitrary components into sidebar regions
   topWidgets = null,
   bottomWidgets = null 
 }) {
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
+  const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
+  const isCreating = useWorkspaceStore((state) => state.isCreating);
+
   const [activeHoverEnv, setActiveHoverEnv] = useState(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+
+  const handleAddEnvironment = async () => {
+    const name = prompt("Enter workspace name:");
+    if (!name) return;
+    await createWorkspace(name, "Personal");
+  };
 
   return (
     <aside className={`bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 transition-all duration-300 relative ${isExpanded ? 'w-64' : 'w-16'}`}>
@@ -60,21 +71,50 @@ export default function WorkspaceSidebar({
         {isExpanded && (
           <div className="flex items-center justify-between mb-3 px-1">
             <h2 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Environments</h2>
-            <button className="text-slate-400 hover:text-emerald-600 transition-colors" title="Add Environment">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <button
+              onClick={handleAddEnvironment}
+              disabled={isCreating}
+              className="text-slate-400 hover:text-emerald-600 transition-colors disabled:opacity-50"
+              title="Add Environment"
+            >
+              <Plus size={14} />
             </button>
           </div>
         )}
+
+        {/* Empty state when no workspaces */}
+        {workspaces.length === 0 && isExpanded && (
+          <div className="px-3 py-4 text-center">
+            <p className="text-xs text-slate-400 mb-2">No environments yet.</p>
+            <button
+              onClick={handleAddEnvironment}
+              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors"
+            >
+              + Create your first workspace
+            </button>
+          </div>
+        )}
+
         <nav className={`space-y-1 ${!isExpanded && 'flex flex-col items-center'}`}>
-          {environments.map((env) => (
+          {workspaces.map((env) => (
             <div 
               key={env.id} 
               className="relative group"
               onMouseEnter={() => setActiveHoverEnv(env.id)}
               onMouseLeave={() => setActiveHoverEnv(null)}
             >
-              <button className={`w-full text-left rounded-lg font-medium text-sm flex items-center transition-all ${isExpanded ? (env.id === 1 ? 'px-3 py-2 bg-emerald-50 text-emerald-800' : 'px-3 py-2 text-slate-600 hover:bg-slate-100') : 'p-2.5 justify-center text-slate-600 hover:bg-slate-100'}`} title={env.name}>
-                {renderIcon(env.iconName, { size: 18, className: `shrink-0 ${env.id === 1 ? 'text-emerald-600' : ''}` })}
+              <button
+                onClick={() => setActiveWorkspace(env.id)}
+                className={`w-full text-left rounded-lg font-medium text-sm flex items-center transition-all ${
+                  isExpanded
+                    ? (activeWorkspaceId === env.id
+                      ? 'px-3 py-2 bg-emerald-50 text-emerald-800'
+                      : 'px-3 py-2 text-slate-600 hover:bg-slate-100')
+                    : 'p-2.5 justify-center text-slate-600 hover:bg-slate-100'
+                }`}
+                title={env.name}
+              >
+                {renderIcon(env.iconName, { size: 18, className: `shrink-0 ${activeWorkspaceId === env.id ? 'text-emerald-600' : ''}` })}
                 {isExpanded && <span className="ml-3 truncate flex-1">{env.name}</span>}
                 {isExpanded && env.type && <span className="bg-emerald-100/50 text-emerald-700 py-0.5 px-2 rounded font-semibold text-[9px] uppercase tracking-wider ml-2 shrink-0">{env.type}</span>}
               </button>
@@ -104,7 +144,7 @@ export default function WorkspaceSidebar({
                     </div>
                     <div>
                       <p className="text-[10px] uppercase text-slate-500 font-bold tracking-wider leading-none">Completed Tasks</p>
-                      <p className="text-sm font-bold text-slate-800 mt-1">24 <span className="text-xs text-slate-400 font-medium">/ 30</span></p>
+                      <p className="text-sm font-bold text-slate-800 mt-1">0 <span className="text-xs text-slate-400 font-medium">/ 0</span></p>
                     </div>
                   </div>
                 </div>

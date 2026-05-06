@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import WorkspaceLayout from "@/components/workspaces/WorkspaceLayout";
 import MultimodalInput from "@/components/workspaces/MultimodalInput";
 import TaskBreakdown from "@/components/workspaces/TaskBreakdown";
 import dynamic from "next/dynamic";
+import useScheduleStore from "@/store/useScheduleStore";
 
 const CalendarView = dynamic(() => import("@/components/schedule-view/CalendarView"), {
   ssr: false,
@@ -17,13 +19,78 @@ const CalendarView = dynamic(() => import("@/components/schedule-view/CalendarVi
     </div>
   )
 });
-import { ChevronRight, ChevronLeft, Bot, ListChecks } from "lucide-react";
+import { ChevronRight, ChevronLeft, Bot, ListChecks, FolderKanban, CalendarDays, BookOpen, Code, Clock } from "lucide-react";
 
 export default function WorkspacePage() {
+  const router = useRouter();
   const [isRightExpanded, setIsRightExpanded] = useState(true);
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
+  
+  const user = useScheduleStore((state) => state.user);
+  const isLoggedIn = useScheduleStore((state) => state.isLoggedIn);
+  const checkAuth = useScheduleStore((state) => state.checkAuth);
+  const initWorkspace = useScheduleStore((state) => state.initWorkspace);
+
+  useEffect(() => {
+    const authenticated = checkAuth();
+    if (!authenticated && !isLoggedIn) {
+      router.push("/login");
+    } else {
+      let queryId = null;
+      let storedUserId = null;
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        queryId = params.get("id");
+
+        if (queryId) {
+          const stored = localStorage.getItem("syncforge_workspaces");
+          if (stored) {
+            const envs = JSON.parse(stored);
+            const env = envs.find(e => e.id === queryId);
+            if (env) {
+              storedUserId = env.userId;
+              setActiveWorkspace(env);
+            }
+          }
+        }
+      }
+
+      if (queryId) {
+        initWorkspace(queryId, storedUserId);
+      } else {
+        initWorkspace();
+      }
+    }
+  }, [checkAuth, isLoggedIn, initWorkspace, router]);
+
+  if (!isLoggedIn && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-600 rounded-full animate-spin"></div>
+          <p className="text-sm font-semibold text-slate-500">Authenticating session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const getIconComponent = (iconName) => {
+    if (iconName === "CalendarDays") return CalendarDays;
+    if (iconName === "BookOpen") return BookOpen;
+    if (iconName === "Code") return Code;
+    if (iconName === "Clock") return Clock;
+    return FolderKanban;
+  };
 
   return (
-    <WorkspaceLayout>
+    <WorkspaceLayout
+      headerProps={{
+        title: activeWorkspace?.name || "Workspace",
+        subtitle: activeWorkspace?.type || "Personal Workspace",
+        icon: getIconComponent(activeWorkspace?.iconName)
+      }}
+    >
       <div className="flex h-full gap-6">
         
         {/* Center Stage: Mathematical Scheduler Visualizer */}

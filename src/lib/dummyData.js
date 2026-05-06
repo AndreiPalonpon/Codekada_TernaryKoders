@@ -6,12 +6,7 @@ const getDay = (offsetDays, hours) => {
   return d;
 };
 
-export const dummyEnvironments = [
-  { id: 1, name: "Capstone Project", type: "Team Workspace", date: "Opened 2 hours ago", color: "bg-emerald-500", iconName: "FolderKanban" },
-  { id: 2, name: "Personal Errands", type: "Personal", date: "Opened yesterday", color: "bg-blue-500", iconName: "CalendarDays" },
-  { id: 3, name: "Hackathon Prep", type: "Team Workspace", date: "Opened 3 days ago", color: "bg-purple-500", iconName: "FolderKanban" },
-  { id: 4, name: "Final Exams Study", type: "Personal", date: "Opened last week", color: "bg-amber-500", iconName: "CalendarDays" }
-];
+export const dummyEnvironments = [];
 
 export const dummyEvents = [
   // Today's Events

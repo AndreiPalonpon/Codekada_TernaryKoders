@@ -12,6 +12,15 @@ export default function WorkspaceHeader({
 }) {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center px-8 justify-between shrink-0 shadow-sm z-10">
@@ -109,8 +118,15 @@ export default function WorkspaceHeader({
                   </div>
 
                   <div className="mt-5 pt-3 border-t border-slate-100">
-                    <button className="w-full py-2 flex items-center justify-center gap-2 text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200">
-                      <LinkIcon size={14} /> Copy Invite Link
+                    <button 
+                      onClick={handleCopyLink}
+                      className={`w-full py-2 flex items-center justify-center gap-2 text-sm font-semibold rounded-lg transition-colors border ${copied ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-200'}`}
+                    >
+                      {copied ? (
+                        <>✓ Copied Workspace Link!</>
+                      ) : (
+                        <><LinkIcon size={14} /> Copy Invite Link</>
+                      )}
                     </button>
                   </div>
                 </div>

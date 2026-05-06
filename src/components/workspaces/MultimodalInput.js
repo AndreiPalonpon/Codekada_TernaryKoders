@@ -7,8 +7,8 @@ import useScheduleStore from "../../store/useScheduleStore";
 export default function MultimodalInput() {
   const textInput = useScheduleStore((state) => state.textInput);
   const setTextInput = useScheduleStore((state) => state.setTextInput);
-  const generateSchedule = useScheduleStore((state) => state.generateSchedule);
-  const isLoading = useScheduleStore((state) => state.isLoading);
+  const analyzePrompt = useScheduleStore((state) => state.analyzePrompt);
+  const isAnalyzing = useScheduleStore((state) => state.isAnalyzing);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -51,16 +51,16 @@ export default function MultimodalInput() {
             </button>
           </div>
           <button
-            onClick={() => generateSchedule("ws_8f92a")}
-            disabled={isLoading}
+            onClick={() => analyzePrompt()}
+            disabled={isAnalyzing}
             className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all shadow-md flex items-center gap-2 group ${
-              isLoading
+              isAnalyzing
                 ? "bg-slate-400 cursor-not-allowed text-slate-200"
                 : "bg-slate-900 hover:bg-slate-800 hover:shadow-lg text-white"
             }`}
           >
-            {isLoading ? "Analyzing..." : "Analyze"}
-            {isLoading ? (
+            {isAnalyzing ? "Analyzing..." : "Analyze"}
+            {isAnalyzing ? (
               <Loader2 size={16} className="animate-spin text-slate-300" />
             ) : (
               <Sparkles size={16} className="text-emerald-400 group-hover:animate-pulse" />

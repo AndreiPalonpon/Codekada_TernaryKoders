@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical } from "lucide-react";
 import { dummyEnvironments as fallbackEnvs } from "@/lib/dummyData";
 import { FolderKanban, CalendarDays } from "lucide-react";
+import useScheduleStore from "../../store/useScheduleStore";
 
 // Helper to render dynamic icons
 const renderIcon = (iconName, props) => {
@@ -14,13 +16,49 @@ const renderIcon = (iconName, props) => {
 export default function WorkspaceSidebar({ 
   isExpanded, 
   setIsExpanded, 
-  environments = fallbackEnvs,
+  environments: propEnvironments,
   // Extensibility props: inject arbitrary components into sidebar regions
   topWidgets = null,
   bottomWidgets = null 
 }) {
+  const router = useRouter();
   const [activeHoverEnv, setActiveHoverEnv] = useState(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [envs, setEnvs] = useState([]);
+
+  const user = useScheduleStore((state) => state.user);
+  const activeWorkspaceId = useScheduleStore((state) => state.workspaceId);
+  const logoutUser = useScheduleStore((state) => state.logoutUser);
+
+  useEffect(() => {
+    if (propEnvironments) {
+      setEnvs(propEnvironments);
+    } else if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("syncforge_workspaces");
+      if (stored) {
+        setEnvs(JSON.parse(stored));
+      } else {
+        setEnvs(fallbackEnvs);
+      }
+    }
+  }, [propEnvironments]);
+
+  // Handle switching between environments in sidebar
+  const handleSwitchEnv = (envId) => {
+    const env = envs.find(e => e.id === envId);
+    if (env) {
+      useScheduleStore.setState({
+        workspaceId: env.id,
+        userId: env.userId || useScheduleStore.getState().userId
+      });
+      router.push(`/workspace?id=${env.id}`);
+    }
+  };
+
+  const handleSignOut = () => {
+    logoutUser();
+    router.push("/login");
+  };
 
   return (
     <aside className={`bg-white border-r border-slate-200 flex flex-col shrink-0 z-20 transition-all duration-300 relative ${isExpanded ? 'w-64' : 'w-16'}`}>
@@ -66,27 +104,34 @@ export default function WorkspaceSidebar({
           </div>
         )}
         <nav className={`space-y-1 ${!isExpanded && 'flex flex-col items-center'}`}>
-          {environments.map((env) => (
-            <div 
-              key={env.id} 
-              className="relative group"
-              onMouseEnter={() => setActiveHoverEnv(env.id)}
-              onMouseLeave={() => setActiveHoverEnv(null)}
-            >
-              <button className={`w-full text-left rounded-lg font-medium text-sm flex items-center transition-all ${isExpanded ? (env.id === 1 ? 'px-3 py-2 bg-emerald-50 text-emerald-800' : 'px-3 py-2 text-slate-600 hover:bg-slate-100') : 'p-2.5 justify-center text-slate-600 hover:bg-slate-100'}`} title={env.name}>
-                {renderIcon(env.iconName, { size: 18, className: `shrink-0 ${env.id === 1 ? 'text-emerald-600' : ''}` })}
-                {isExpanded && <span className="ml-3 truncate flex-1">{env.name}</span>}
-                {isExpanded && env.type && <span className="bg-emerald-100/50 text-emerald-700 py-0.5 px-2 rounded font-semibold text-[9px] uppercase tracking-wider ml-2 shrink-0">{env.type}</span>}
-              </button>
-              {isExpanded && activeHoverEnv === env.id && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
-                  <button className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white rounded shadow-sm border border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <MoreVertical size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+          {envs.map((env) => {
+            const isActive = env.id === activeWorkspaceId;
+            return (
+              <div 
+                key={env.id} 
+                className="relative group"
+                onMouseEnter={() => setActiveHoverEnv(env.id)}
+                onMouseLeave={() => setActiveHoverEnv(null)}
+              >
+                <button 
+                  onClick={() => handleSwitchEnv(env.id)}
+                  className={`w-full text-left rounded-lg font-medium text-sm flex items-center transition-all ${isExpanded ? (isActive ? 'px-3 py-2 bg-emerald-50 text-emerald-800' : 'px-3 py-2 text-slate-600 hover:bg-slate-100') : 'p-2.5 justify-center text-slate-600 hover:bg-slate-100'}`} 
+                  title={env.name}
+                >
+                  {renderIcon(env.iconName, { size: 18, className: `shrink-0 ${isActive ? 'text-emerald-600' : ''}` })}
+                  {isExpanded && <span className="ml-3 truncate flex-1">{env.name}</span>}
+                  {isExpanded && env.type && <span className="bg-emerald-100/50 text-emerald-700 py-0.5 px-2 rounded font-semibold text-[9px] uppercase tracking-wider ml-2 shrink-0">{env.type}</span>}
+                </button>
+                {isExpanded && activeHoverEnv === env.id && (
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
+                    <button className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white rounded shadow-sm border border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <MoreVertical size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Custom Bottom Widgets Injection (e.g. Analytics, App Store) */}
@@ -127,11 +172,11 @@ export default function WorkspaceSidebar({
           className="flex items-center gap-3 w-full text-left hover:bg-slate-50 p-1 -m-1 rounded-lg transition-colors group"
         >
           <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm border-2 border-white">
-            ST
+            {user?.name ? user.name.slice(0, 2).toUpperCase() : "ST"}
           </div>
           {isExpanded && (
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition-colors">SmartyToonster</p>
+              <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition-colors">{user?.name || "SmartyToonster"}</p>
               <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Pro Plan</p>
             </div>
           )}
@@ -142,8 +187,8 @@ export default function WorkspaceSidebar({
             <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)}></div>
             <div className="absolute bottom-full left-4 mb-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
               <div className="px-4 py-2 border-b border-slate-100 mb-2">
-                <p className="text-sm font-bold text-slate-900">SmartyToonster</p>
-                <p className="text-xs text-slate-500">smarty@codekada.com</p>
+                <p className="text-sm font-bold text-slate-900">{user?.name || "SmartyToonster"}</p>
+                <p className="text-xs text-slate-500">{user?.email || "smarty@codekada.com"}</p>
               </div>
               <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2 transition-colors">
                 <Settings size={16} /> Account Settings
@@ -152,7 +197,10 @@ export default function WorkspaceSidebar({
                 <CreditCard size={16} /> Billing & Plan
               </button>
               <div className="my-2 border-t border-slate-100"></div>
-              <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
+              <button 
+                onClick={handleSignOut}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
                 <LogOut size={16} /> Sign out
               </button>
             </div>

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
+import useScheduleStore from "@/store/useScheduleStore";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,23 +13,37 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const loginUser = useScheduleStore((state) => state.loginUser);
+  const isLoggedIn = useScheduleStore((state) => state.isLoggedIn);
+  const checkAuth = useScheduleStore((state) => state.checkAuth);
+
+  // If already logged in, redirect to index
+  useEffect(() => {
+    const authenticated = checkAuth();
+    if (authenticated) {
+      router.push("/");
+    }
+  }, [checkAuth, router]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate authentication API call
-    setTimeout(() => {
-      setIsLoading(false);
-      
+    const success = await loginUser(name, email, password, isSignUp);
+    setIsLoading(false);
+    
+    if (success) {
       if (isSignUp) {
-        // Enforce the user returning to sign-in state to limit entry ways
         setIsSignUp(false);
         alert("Account created successfully! Please sign in.");
+        setName("");
+        setPassword("");
       } else {
-        // Navigate to the environment picker dashboard
         router.push("/");
       }
-    }, 1200);
+    } else {
+      alert("Authentication failed. Please check your credentials.");
+    }
   };
 
   return (

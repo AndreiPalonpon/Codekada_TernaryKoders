@@ -11,7 +11,7 @@ import useScheduleStore from "../../store/useScheduleStore";
 
 export default function CalendarView() {
   const storeEvents = useScheduleStore((state) => state.events);
-  const events = storeEvents.length > 0 ? storeEvents : fallbackEvents;
+  const events = storeEvents;
   const [selectedEvent, setSelectedEvent] = useState(null);
   const calendarRef = useRef(null);
   const wrapperRef = useRef(null);

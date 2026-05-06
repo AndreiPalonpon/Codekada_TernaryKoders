@@ -7,8 +7,11 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import { Filter, Download } from "lucide-react";
 import EventDetailsModal from "./EventDetailsModal";
 import { dummyEvents as fallbackEvents } from "@/lib/dummyData";
+import useScheduleStore from "../../store/useScheduleStore";
 
-export default function CalendarView({ events = fallbackEvents }) {
+export default function CalendarView() {
+  const storeEvents = useScheduleStore((state) => state.events);
+  const events = storeEvents.length > 0 ? storeEvents : fallbackEvents;
   const [selectedEvent, setSelectedEvent] = useState(null);
   const calendarRef = useRef(null);
   const wrapperRef = useRef(null);

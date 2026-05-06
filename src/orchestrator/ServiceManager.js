@@ -35,6 +35,22 @@ class ServiceManager {
 
     return new DummySyncAdapter();
   }
+
+  /**
+   * Returns the AI service, always wrapped in FallbackAIDecorator.
+   *
+   * The FallbackAIDecorator ensures that if the Gemini API is unavailable
+   * (timeout, quota exhausted, network failure), the pipeline receives an
+   * empty array instead of an unhandled exception.
+   *
+   * Both imports are dynamic to avoid loading the heavy Gemini SDK on pages
+   * that never touch the AI pipeline.
+   */
+  async getAIService() {
+    const { geminiAdapter }              = await import('../services/ai/MultimodalGeminiAdapter.js');
+    const { default: FallbackAIDecorator } = await import('../services/ai/FallbackAIDecorator.js');
+    return new FallbackAIDecorator(geminiAdapter);
+  }
 }
 
 // Export a singleton so the Orchestrator shares the same DI container.

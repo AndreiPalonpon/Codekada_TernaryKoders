@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Settings, Plus, FolderKanban, CalendarDays, MoreVertical, LayoutGrid, List } from "lucide-react";
 
+import { GoogleAuthButton } from "@/components/auth/google-auth-button";
 import { dummyEnvironments as environments } from "@/lib/dummyData";
 
 // Helper to render dynamic icons
@@ -44,7 +45,7 @@ export default function EnvironmentPicker() {
         </div>
         
         {/* Right Actions */}
-        <div className="w-1/3 flex items-center justify-end gap-5">
+        <div className="w-1/3 flex items-center justify-end gap-4">
           <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative" title="Notifications">
             <Bell size={20} />
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
@@ -52,13 +53,16 @@ export default function EnvironmentPicker() {
           <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
             <Settings size={20} />
           </button>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-white ml-2 cursor-pointer hover:shadow-md transition-shadow">
-            ST
+          <div className="hidden sm:block">
+            <GoogleAuthButton />
           </div>
         </div>
       </header>
       
       <main className="flex-1 w-full max-w-6xl mx-auto p-6 md:p-10">
+        <div className="mb-6 sm:hidden">
+          <GoogleAuthButton />
+        </div>
         
         {/* Create New Section */}
         <section className="mb-12">

@@ -32,6 +32,14 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: getRequiredEnv("GOOGLE_CLIENT_ID"),
       clientSecret: getRequiredEnv("GOOGLE_CLIENT_SECRET"),
+      authorization: {
+        params: {
+          scope:
+            "openid email profile https://www.googleapis.com/auth/calendar.readonly",
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     }),
   ],
   callbacks: {
@@ -56,6 +64,10 @@ export const authOptions: NextAuthOptions = {
       try {
         await dbConnect();
 
+        const tokenExpiry = googleAccount.expires_at
+          ? new Date(googleAccount.expires_at * 1000)
+          : undefined;
+
         const existingUser = await User.findOne({ email: user.email });
 
         if (!existingUser) {
@@ -72,12 +84,23 @@ export const authOptions: NextAuthOptions = {
               google_calendar: {
                 access_token: googleAccount.access_token,
                 refresh_token: googleAccount.refresh_token,
-                token_expiry: googleAccount.expires_at
-                  ? new Date(googleAccount.expires_at * 1000)
-                  : undefined,
+                token_expiry: tokenExpiry,
               },
             },
           });
+        } else {
+          const tokenUpdate: Record<string, unknown> = {
+            "integrations.google_calendar.access_token":
+              googleAccount.access_token,
+            "integrations.google_calendar.token_expiry": tokenExpiry,
+          };
+
+          if (googleAccount.refresh_token) {
+            tokenUpdate["integrations.google_calendar.refresh_token"] =
+              googleAccount.refresh_token;
+          }
+
+          await User.updateOne({ email: user.email }, { $set: tokenUpdate });
         }
 
         return true;

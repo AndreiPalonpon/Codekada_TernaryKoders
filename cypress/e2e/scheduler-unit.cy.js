@@ -125,8 +125,12 @@ describe('NUserBinPacking — Scheduler Unit Tests', () => {
   it('Edge: returns full=true and unscheduled tasks when no free bins exist', () => {
     const tasks = [makeTask({ metadata: { task_name: 'Impossible Task', estimated_minutes: 60, cognitive_load: 'Low', priority: 'P1', splittable: false } })];
     // Busy from 9am to 5pm tomorrow — the entire working day.
-    // lookAheadDays:2 covers today (rest of day, already past) + tomorrow (all busy via makeCalendar).
-    const calendars = [makeCalendar([[9, 17]])];
+    const tomorrowCalendar = makeCalendar([[9, 17]]);
+    // Block today (Day 0) completely so no free space is found today.
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    tomorrowCalendar.busy.push({ start: todayStart.toISOString(), end: todayEnd.toISOString() });
+    const calendars = [tomorrowCalendar];
 
     runScheduler(tasks, calendars, { lookAheadDays: 2 }).then((res) => {
       expect(res.status).to.eq(200);
@@ -154,7 +158,12 @@ describe('NUserBinPacking — Scheduler Unit Tests', () => {
     // Since the morning bin (120 min) < task size (300 min), the scheduler MUST split it
     // across both bins, producing 2 schedule_blocks.
     const tasks = [makeTask({ metadata: { task_name: 'Long Research', estimated_minutes: 300, cognitive_load: 'Medium', priority: 'P3', splittable: true } })];
-    const calendars = [makeCalendar([[11, 13]])]; // 2hr free morning + 4hr free afternoon (tomorrow).
+    const tomorrowCalendar = makeCalendar([[11, 13]]); // 2hr free morning + 4hr free afternoon (tomorrow).
+    // Block today (Day 0) completely so no free space is found today.
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    tomorrowCalendar.busy.push({ start: todayStart.toISOString(), end: todayEnd.toISOString() });
+    const calendars = [tomorrowCalendar];
 
     // lookAheadDays:2 covers today (already past) + tomorrow (where makeCalendar puts bins).
     runScheduler(tasks, calendars, { lookAheadDays: 2 }).then((res) => {

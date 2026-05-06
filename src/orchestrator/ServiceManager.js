@@ -1,4 +1,4 @@
-import { FLAGS } from './FeatureFlags.js';
+import { FLAGS, AI_PROVIDERS } from './FeatureFlags.js';
 import NUserBinPacking from '../services/scheduler/NUserBinPacking.js';
 import DummySyncAdapter from '../services/realtime/DummySyncAdapter.js';
 
@@ -9,7 +9,8 @@ import DummySyncAdapter from '../services/realtime/DummySyncAdapter.js';
  * Reads FeatureFlags and returns the correct concrete service implementation.
  *
  * This decouples the Orchestrator from specific service implementations —
- * swapping from DummySyncAdapter to PusherAdapter requires only a flag change.
+ * swapping from DummySyncAdapter to PusherAdapter requires only a flag change,
+ * and swapping between different AI providers requires only a config update.
  */
 class ServiceManager {
   /**
@@ -39,19 +40,35 @@ class ServiceManager {
   /**
    * Returns the AI service, always wrapped in FallbackAIDecorator.
    *
-   * The FallbackAIDecorator ensures that if the Gemini API is unavailable
+   * The FallbackAIDecorator ensures that if the active AI API is unavailable
    * (timeout, quota exhausted, network failure), the pipeline receives an
    * empty array instead of an unhandled exception.
    *
-   * Both imports are dynamic to avoid loading the heavy Gemini SDK on pages
-   * that never touch the AI pipeline.
+   * Adapter selection is driven by the ACTIVE_AI_PROVIDER feature flag:
+   *   - AI_PROVIDERS.GEMINI   → MultimodalGeminiAdapter (Gemini 2.5 Flash).
+   *   - AI_PROVIDERS.GEMMA    → OllamaGemmaAdapter (Gemma 4).
+   *
+   * Both imports are dynamic to avoid loading any AI SDK on pages that never
+   * touch the AI pipeline.
    */
   async getAIService() {
-    const { geminiAdapter }              = await import('../services/ai/MultimodalGeminiAdapter.js');
     const { default: FallbackAIDecorator } = await import('../services/ai/FallbackAIDecorator.js');
-    return new FallbackAIDecorator(geminiAdapter);
+
+    switch (FLAGS.ACTIVE_AI_PROVIDER) {
+      case AI_PROVIDERS.GEMMA: {
+        const { gemmaAdapter } = await import('../services/ai/OllamaGemmaAdapter.js');
+        return new FallbackAIDecorator(gemmaAdapter);
+      }
+      
+      case AI_PROVIDERS.GEMINI:
+      default: {
+        const { geminiAdapter } = await import('../services/ai/MultimodalGeminiAdapter.js');
+        return new FallbackAIDecorator(geminiAdapter);
+      }
+    }
   }
 }
 
 // Export a singleton so the Orchestrator shares the same DI container.
 export default new ServiceManager();
+

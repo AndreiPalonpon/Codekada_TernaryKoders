@@ -186,6 +186,25 @@ describe('AI Service — POST /api/ai/generate', () => {
       });
     });
 
+    it('returns a 200 with the cached/large document generation strategy', { timeout: AI_RESPONSE_TIMEOUT_MS + 5000 }, () => {
+      cy.request({
+        method:  'POST',
+        url:     AI_GENERATE_URL,
+        body:    {
+          ...VALID_PAYLOAD,
+          file_uri: 'Syllabus Course Outline: CS 101. Final Exam on Dec 10, worth 40%. Homework 1 on Nov 5, worth 10%.',
+          file_mime_type: 'text/plain',
+          text_prompt: 'Extract all study tasks from this syllabus text.',
+        },
+        timeout: AI_RESPONSE_TIMEOUT_MS,
+      }).then((response) => {
+        expect(response.status).to.equal(200);
+        expect(response.body.success).to.be.true;
+        expect(response.body.data).to.have.property('generation_strategy', 'cache');
+        expect(response.body.data.tasks).to.be.an('array');
+      });
+    });
+
     it('returns a tasks array in the response data', { timeout: AI_RESPONSE_TIMEOUT_MS + 5000 }, () => {
       cy.request({
         method:  'POST',

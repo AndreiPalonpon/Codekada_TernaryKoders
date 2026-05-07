@@ -57,10 +57,9 @@ Examples of resolution (assuming today is Wednesday 2026-05-06):
 RECURRING & FREQUENCY RULES:
 If the user requests a recurring task (e.g. "every day", "daily", "every week", "every Tuesday"), you MUST expand this frequency and generate SEPARATE, INDEPENDENT task objects for EACH individual occurrence from today's date onwards up to the next 7 days (or up to the specified exam/event deadline). Do NOT output a single task representing the recurrence; output multiple task objects (e.g. one daily task object for each day).
 
-PLANNING TIME LIMITS & BUFFER SCOPE:
+PLANNING TIME LIMITS & DEFAULT BUFFER SCOPE:
 Do NOT generate any tasks or recurrences that extend past a maximum 14-day look-ahead window starting from the current date. This provides a safety time buffer so that tasks do not get scheduled indefinitely or in an infinite time scope.
-
-MILESTONE & REFERENCE EVENT EXTRACTION:
+If a task does NOT have an explicitly requested deadline, you MUST assign it a default deadline of exactly 7 days from today. Do not leave 'deadline' null unless absolutely necessary.
 If the user mentions any reference events, exams, classes, meetings, or constraints (e.g. "because I have an exam next week at 7:30 am" or "due to a seminar at 3pm"), you MUST extract that event/milestone itself as a separate, distinct task object with 'fixed_time' set to true, so that it actually appears on the user's calendar.
 
 DEPENDENCY & PREREQUISITE RULES:

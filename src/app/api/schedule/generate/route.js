@@ -244,6 +244,13 @@ export async function POST(request) {
       // ServiceManager provides FallbackAIDecorator(geminiAdapter).
       // If the Gemini API is unavailable, the decorator catches and returns [].
       const aiService = await serviceManager.getAIService();
+      
+      console.log("\n==========================================");
+      console.log("[ROUTE LOGS] Initiating AI Phase 1...");
+      console.log(`- Base64 Images Count: ${base64Images.length}`);
+      console.log(`- Text Prompt preview: ${textPrompt.slice(0, 100)}...`);
+      console.log("==========================================\n");
+
       aiTasks = await aiService.generateStandard(
         workspace_id,
         'user_mvp',        // MVP: hardcoded user ID until auth is wired
@@ -251,6 +258,12 @@ export async function POST(request) {
         textPrompt,
         base64Images
       );
+      
+      console.log("\n==========================================");
+      console.log("[ROUTE LOGS] AI Phase 1 Completed.");
+      console.log(`- Parsed Task Count: ${aiTasks?.length || 0}`);
+      console.log(`- Parsed Tasks Metadata preview:`, JSON.stringify(aiTasks.map(t => t.metadata?.task_name), null, 2));
+      console.log("==========================================\n");
     }
 
     // If the AI returned no tasks (empty input or fallback), return early.

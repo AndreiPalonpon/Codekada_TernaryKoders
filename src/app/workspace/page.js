@@ -24,7 +24,8 @@ import { ChevronRight, ChevronLeft, Bot, ListChecks } from "lucide-react";
 
 export default function WorkspacePage() {
   const [isRightExpanded, setIsRightExpanded] = useState(true);
-  const [activeSection, setActiveSection] = useState("input"); // "input" or "breakdown"
+  const [expandedSection, setExpandedSection] = useState("input"); // "input" or "breakdown"
+  const [activeInput, setActiveInput] = useState("ai"); // "ai" or "manual"
 
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const loadSchedule = useScheduleStore((state) => state.loadSchedule);
@@ -78,75 +79,65 @@ export default function WorkspacePage() {
           
           {isRightExpanded ? (
             <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
-              {/* Segmented Control */}
-              <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
-                <button 
-                  onClick={() => setActiveSection("input")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "input" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
-                >
-                  <Bot size={14} />
-                  AI Brain
-                </button>
-                <button 
-                  onClick={() => setActiveSection("manual")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "manual" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
-                >
-                  <ListChecks size={14} />
-                  Manual Form
-                </button>
-                <button 
-                  onClick={() => setActiveSection("breakdown")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "breakdown" ? "bg-white text-slate-800 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
-                >
-                  <ListChecks size={14} />
-                  Task List
-                </button>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 shadow-sm shrink-0">
-                <strong>Assistant Panel:</strong> Use <strong>AI Brain</strong> to convert notes or images into tasks, or <strong>Manual Form</strong> to bypass AI entirely!
-              </div>
               
-              <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
-                {activeSection === "input" && (
-                  <MultimodalInput 
-                    isExpanded={true} 
-                    onToggle={() => {}} 
-                  />
-                )}
-                {activeSection === "manual" && (
-                  <ManualTaskInput 
-                    isExpanded={true} 
-                    onToggle={() => {}} 
-                  />
-                )}
-                {activeSection === "breakdown" && (
-                  <TaskBreakdown 
-                    isExpanded={true} 
-                    onToggle={() => {}} 
-                  />
-                )}
-              </div>
+              {/* Top Segmented Control (only visible when input section is expanded) */}
+              {expandedSection === "input" && (
+                <div className="flex bg-slate-100 p-1 rounded-lg shrink-0 animate-in fade-in slide-in-from-top-2">
+                  <button 
+                    onClick={() => setActiveInput("ai")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeInput === "ai" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                  >
+                    <Bot size={14} />
+                    AI Brain
+                  </button>
+                  <button 
+                    onClick={() => setActiveInput("manual")}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeInput === "manual" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                  >
+                    <ListChecks size={14} />
+                    Manual Form
+                  </button>
+                </div>
+              )}
+
+              {/* Input Modal (AI or Manual) */}
+              {activeInput === "ai" ? (
+                <MultimodalInput 
+                  isExpanded={expandedSection === "input"} 
+                  onToggle={() => setExpandedSection(expandedSection === "input" ? null : "input")} 
+                />
+              ) : (
+                <ManualTaskInput 
+                  isExpanded={expandedSection === "input"} 
+                  onToggle={() => setExpandedSection(expandedSection === "input" ? null : "input")} 
+                />
+              )}
+
+              {/* Task Breakdown */}
+              <TaskBreakdown 
+                isExpanded={expandedSection === "breakdown"} 
+                onToggle={() => setExpandedSection(expandedSection === "breakdown" ? null : "breakdown")} 
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-4 mt-4 w-full items-center">
               <button 
-                onClick={() => { setIsRightExpanded(true); setActiveSection("input"); }}
-                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "input" ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"}`}
+                onClick={() => { setIsRightExpanded(true); setExpandedSection("input"); setActiveInput("ai"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${expandedSection === "input" && activeInput === "ai" ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"}`}
                 title="AI Brain Input"
               >
                 <Bot size={22} />
               </button>
               <button 
-                onClick={() => { setIsRightExpanded(true); setActiveSection("manual"); }}
-                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "manual" ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"}`}
+                onClick={() => { setIsRightExpanded(true); setExpandedSection("input"); setActiveInput("manual"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${expandedSection === "input" && activeInput === "manual" ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"}`}
                 title="Direct Manual Input"
               >
                 <ListChecks size={22} />
               </button>
               <button 
-                onClick={() => { setIsRightExpanded(true); setActiveSection("breakdown"); }}
-                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "breakdown" ? "text-slate-800 bg-slate-100" : "text-slate-400 hover:text-slate-800 hover:bg-slate-100"}`}
+                onClick={() => { setIsRightExpanded(true); setExpandedSection("breakdown"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${expandedSection === "breakdown" ? "text-slate-800 bg-slate-100" : "text-slate-400 hover:text-slate-800 hover:bg-slate-100"}`}
                 title="View Generated Tasks"
               >
                 <ListChecks size={22} />

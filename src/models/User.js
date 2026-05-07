@@ -1,0 +1,27 @@
+import mongoose from 'mongoose';
+
+const UserProfileSchema = new mongoose.Schema({
+  // 1. Identity & Auth
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  auth_provider_id: { type: String, required: true }, // e.g., Google sub ID
+  password: { type: String }, // Hashed password for credentials-based users
+
+  // 2. AI Scheduling Preferences
+  preferences: {
+    preferred_window: { type: String, enum: ['Morning', 'Afternoon', 'Night'], default: 'Morning' },
+    deep_work_max_minutes: { type: Number, default: 240 },
+    buffer_minutes: { type: Number, default: 15 } // Gap between heavy tasks
+  },
+
+  // 3. Integration Tokens (Encrypted)
+  integrations: {
+    google_calendar: {
+      access_token: { type: String },
+      refresh_token: { type: String },
+      token_expiry: { type: Date }
+    }
+  }
+}, { timestamps: true, collection: 'Users' });
+
+export default mongoose.models.User || mongoose.model('User', UserProfileSchema);

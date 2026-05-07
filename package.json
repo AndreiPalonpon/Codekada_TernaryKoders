@@ -1,0 +1,43 @@
+{
+  "name": "codekada-ternary-koders",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run"
+  },
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
+    "@fullcalendar/timegrid": "^6.1.15",
+    "@google/genai": "^1.52.0",
+    "@google/generative-ai": "^0.21.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "googleapis": "^144.0.0",
+    "lucide-react": "^0.462.0",
+    "mongoose": "^8.23.1",
+    "next": "15.0.3",
+    "next-auth": "^4.24.10",
+    "pusher": "^5.2.0",
+    "pusher-js": "^8.4.0-rc2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.5",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.25.76",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "cypress": "^15.14.2",
+    "eslint": "^8",
+    "eslint-config-next": "15.0.3",
+    "tailwindcss": "^4.0.0"
+  }
+}

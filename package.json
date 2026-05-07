@@ -22,7 +22,7 @@
     "googleapis": "^144.0.0",
     "lucide-react": "^0.462.0",
     "mongoose": "^8.23.1",
-    "next": "15.0.3",
+    "next": "15.0.7",
     "next-auth": "^4.24.10",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0-rc2",

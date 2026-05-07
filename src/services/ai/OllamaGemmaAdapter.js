@@ -74,9 +74,15 @@ The output MUST be a JSON array of objects, where each object has this EXACT nes
     "start_after": "ISO 8601 date or null",
     "deadline": "ISO 8601 date or null",
     "priority": "P1" | "P2" | "P3" | "P4",
-    "depends_on": "task_name of prerequisite task, or null"
+    "depends_on": "task_name of prerequisite task, or null",
+    "fixed_time": boolean (MUST be true if the user mentions a specific exact time like "at 3pm")
   }
 }
+
+STRICT TEMPORAL REQUIREMENTS:
+1. If 'fixed_time' is true, 'start_after' MUST be a full ISO 8601 string including the TIME and OFFSET (e.g. "2026-05-11T15:00:00+08:00").
+2. NEVER output a date alone (YYYY-MM-DD) for a fixed-time task.
+3. If no time is mentioned, set 'fixed_time' to false and use YYYY-MM-DD for flexible boundaries.
 
 Do NOT invent or alter workspace_id or assigned_to IDs — map them exactly as given in the user input.
 If the user's input contains no actionable tasks, return an empty array [].
@@ -208,12 +214,23 @@ class OllamaGemmaAdapter extends IAIService {
     const isoDate = now.toISOString().slice(0, 10);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
+    // Calculate timezone offset in format ±HH:MM
+    const offset = -now.getTimezoneOffset();
+    const sign = offset >= 0 ? '+' : '-';
+    const pad = (num) => Math.floor(Math.abs(num)).toString().padStart(2, '0');
+    const offsetString = `${sign}${pad(offset / 60)}:${pad(offset % 60)}`;
+    
+    // Create local time string
+    const localTime = new Date(now.getTime() + offset * 60000).toISOString().slice(11, 16);
+
     return [
-      `Current Date: ${isoDate} (${currentDay})`,
-      `Timezone: ${timezone}`,
+      `Current Local Date: ${isoDate} (${currentDay})`,
+      `Current Local Time: ${localTime}`,
+      `Timezone Offset: ${offsetString} (${timezone})`,
       `Workspace ID: ${workspaceId}`,
       `Assigned To (User ID): ${assignedTo}`,
       `User Preferences: ${JSON.stringify(userPreferences)}`,
+      `CRITICAL INSTRUCTION: Any absolute dates generated for 'start_after' or 'deadline' MUST explicitly include the Timezone Offset provided (e.g. YYYY-MM-DDTHH:MM:00${offsetString}). NEVER output dates ending in 'Z' if the user requested a specific local time. If the user specifies an exact time (e.g., "3pm"), output exactly that time with the timezone offset. If the user specifies a constraint but no time, default to 00:00:00 for the start of the day or 23:59:59 for deadlines, using the offset.`
     ].join("\n");
   }
 

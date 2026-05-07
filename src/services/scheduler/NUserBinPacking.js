@@ -47,11 +47,20 @@ class NUserBinPacking extends ISchedulerEngine {
       timezone = 'UTC',
       deep_work_max_minutes = 240,
       buffer_minutes = 15,
+      exclude_times = [],
+      exclude_days = [],
+      force_split_tasks = false,
     } = userPrefs;
 
     if (!tasks || tasks.length === 0) {
       return { scheduled: [], unscheduled: [], full: false };
     }
+
+    // Convert exclude_times into daily busy blocks pattern
+    const recurringBusyBlocks = exclude_times.map(timeRange => {
+      const [start, end] = timeRange.split('-');
+      return { startStr: start.trim(), endStr: end.trim() };
+    });
 
     // Step 1: Build a merged list of all busy blocks across all calendars.
     const allBusyBlocks = this._mergeAndSortBusyBlocks(calendars);
@@ -62,7 +71,9 @@ class NUserBinPacking extends ISchedulerEngine {
       work_day_start,
       work_day_end,
       timezone,
-      buffer_minutes
+      buffer_minutes,
+      exclude_days,
+      recurringBusyBlocks
     );
 
     if (freeBins.length === 0) {
@@ -78,7 +89,7 @@ class NUserBinPacking extends ISchedulerEngine {
     const unscheduled = [];
 
     for (const task of sortedTasks) {
-      const result = this._fitTaskIntoBins(task, freeBins, deep_work_max_minutes, buffer_minutes);
+      const result = this._fitTaskIntoBins(task, freeBins, deep_work_max_minutes, buffer_minutes, force_split_tasks);
 
       if (result.blocks.length > 0) {
         scheduled.push({ ...task, schedule_blocks: result.blocks });
@@ -133,12 +144,17 @@ class NUserBinPacking extends ISchedulerEngine {
    * For each day, starts at work_day_start and carves out free bins around busy blocks.
    * Returns an array of mutable { start, end, remainingMinutes } objects.
    */
-  _generateFreeBins(busyBlocks, workStart, workEnd, timezone, bufferMinutes) {
+  _generateFreeBins(busyBlocks, workStart, workEnd, timezone, bufferMinutes, excludeDays, recurringBusyBlocks) {
     const freeBins = [];
     const now = new Date();
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
     for (let dayOffset = 0; dayOffset < this.lookAheadDays; dayOffset++) {
       const dayBase = startOfDay(addDays(now, dayOffset));
+      const currentDayName = dayNames[dayBase.getDay()];
+
+      // Skip excluded days
+      if (excludeDays.includes(currentDayName)) continue;
 
       // Parse work hours as UTC-aware dates for this day.
       const [startH, startM] = workStart.split(':').map(Number);
@@ -153,10 +169,20 @@ class NUserBinPacking extends ISchedulerEngine {
       // Skip days that are entirely in the past.
       if (dayEnd < now) continue;
 
+      // Inject recurring busy blocks (exclude_times) for this day
+      const dailyBusy = [...busyBlocks];
+      for (const req of recurringBusyBlocks) {
+        const [rStartH, rStartM] = req.startStr.split(':').map(Number);
+        const [rEndH, rEndM] = req.endStr.split(':').map(Number);
+        const reqStart = new Date(dayBase); reqStart.setHours(rStartH, rStartM, 0, 0);
+        const reqEnd = new Date(dayBase); reqEnd.setHours(rEndH, rEndM, 0, 0);
+        dailyBusy.push({ start: reqStart, end: reqEnd });
+      }
+
       // Collect busy blocks that fall within this working day.
-      const dayBusy = busyBlocks.filter(
+      const dayBusy = dailyBusy.filter(
         (b) => b.start < dayEnd && b.end > dayStart
-      );
+      ).sort((a, b) => a.start - b.start);
 
       // Carve free windows around the busy blocks within working hours.
       let cursor = dayStart < now ? now : dayStart;
@@ -237,18 +263,40 @@ class NUserBinPacking extends ISchedulerEngine {
    * - If task.metadata.start_after is set, bins ending before that date are skipped.
    * - If task.metadata.deadline is set, bins starting after that date are excluded.
    */
-  _fitTaskIntoBins(task, freeBins, deepWorkMaxMinutes, bufferMinutes) {
+  _fitTaskIntoBins(task, freeBins, deepWorkMaxMinutes, bufferMinutes, forceSplitTasks) {
     const needed = task.metadata?.estimated_minutes ?? 0;
-    const splittable = task.metadata?.splittable ?? false;
+    const splittable = forceSplitTasks ? true : (task.metadata?.splittable ?? false);
     const isCognitivelyHeavy = task.metadata?.cognitive_load === 'High';
+    const isFixedTime = task.metadata?.fixed_time === true;
 
     // Parse chronological constraints from the AI's output.
-    const startAfter = task.metadata?.start_after
-      ? this._toStartOfDay(task.metadata.start_after)
-      : null;
-    const deadline = task.metadata?.deadline
-      ? this._toEndOfDay(task.metadata.deadline)
-      : null;
+    let startAfter, deadline;
+
+    if (isFixedTime) {
+      const rawStart = task.metadata?.start_after;
+      startAfter = rawStart ? new Date(rawStart) : null;
+      deadline = task.metadata?.deadline ? new Date(task.metadata.deadline) : null;
+      
+      // Fixed time tasks bypass bin packing and get pinned to their exact time.
+      // We check if the parsed date is valid and contains more than just a date (YYYY-MM-DD).
+      // A full ISO string for a fixed time should be > 10 chars.
+      if (startAfter && !isNaN(startAfter.getTime()) && rawStart.length > 10) {
+        const blockStart = startAfter;
+        const blockEnd = deadline ? deadline : addMinutes(blockStart, needed);
+        return { blocks: [{
+          start_time: formatISO(blockStart),
+          end_time: formatISO(blockEnd),
+          calendar_event_id: null,
+        }] };
+      }
+    } else {
+      startAfter = task.metadata?.start_after
+        ? this._toStartOfDay(task.metadata.start_after)
+        : null;
+      deadline = task.metadata?.deadline
+        ? this._toEndOfDay(task.metadata.deadline)
+        : null;
+    }
 
     // For High cognitive load, cap each block at deep_work_max_minutes.
     const maxBlockSize = isCognitivelyHeavy ? deepWorkMaxMinutes : Infinity;

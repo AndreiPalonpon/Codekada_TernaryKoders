@@ -7,6 +7,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import { Filter, Download, X } from "lucide-react";
 import EventDetailsModal from "./EventDetailsModal";
 import useScheduleStore from "../../store/useScheduleStore";
+import ConfirmationModal from "../ui/ConfirmationModal";
 
 export default function CalendarView() {
   const rawEvents = useScheduleStore((state) => state.events);
@@ -23,6 +24,7 @@ export default function CalendarView() {
 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const calendarRef = useRef(null);
   const wrapperRef = useRef(null);
 
@@ -134,7 +136,7 @@ export default function CalendarView() {
           {/* Clear Schedule */}
           {events.length > 0 && (
             <button
-              onClick={clearSchedule}
+              onClick={() => setIsClearModalOpen(true)}
               className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded transition-colors shadow-sm flex items-center gap-1.5"
             >
               <X size={14} /> Clear
@@ -192,6 +194,17 @@ export default function CalendarView() {
 
       {/* Extracted Event Modal Component */}
       <EventDetailsModal event={selectedEvent} onClose={closePopup} />
+
+      <ConfirmationModal 
+        isOpen={isClearModalOpen}
+        onClose={() => setIsClearModalOpen(false)}
+        onConfirm={clearSchedule}
+        title="Clear Schedule?"
+        description="Are you sure you want to modify your current calendar? All scheduled tasks will be wiped."
+        confirmText="Clear All"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 }

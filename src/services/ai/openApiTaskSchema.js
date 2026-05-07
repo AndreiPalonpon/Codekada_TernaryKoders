@@ -58,6 +58,10 @@ const openApiTaskSchema = {
             description: "The task_name of another task that must be completed before this one can start. Null or absent if no dependency.",
             nullable: true,
           },
+          fixed_time: {
+            type: "BOOLEAN",
+            description: "True if the user specified an EXACT time for this task (e.g., 'Meeting at 3pm'). False if it is a general task to be scheduled flexibly.",
+          },
         },
         required: [
           "task_name",
@@ -65,6 +69,7 @@ const openApiTaskSchema = {
           "cognitive_load",
           "preferred_window",
           "splittable",
+          "fixed_time",
         ],
       },
     },

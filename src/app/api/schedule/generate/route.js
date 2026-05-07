@@ -40,6 +40,9 @@ const GenerateRequestSchema = z.object({
   user_preferences: z.object({
     deep_work_hours: z.array(z.string()).optional().default(['09:00', '17:00']),
     max_daily_load_minutes: z.number().optional().default(240),
+    exclude_times: z.array(z.string()).optional().default([]),
+    exclude_days: z.array(z.string()).optional().default([]),
+    force_split_tasks: z.boolean().optional().default(false),
   }).optional().default({}),
 });
 
@@ -193,6 +196,9 @@ export async function POST(request) {
         work_day_end:         user_preferences?.deep_work_hours?.[1] || '17:00',
         deep_work_max_minutes: user_preferences?.max_daily_load_minutes || 240,
         buffer_minutes:       15,
+        exclude_times:        user_preferences?.exclude_times || [],
+        exclude_days:         user_preferences?.exclude_days || [],
+        force_split_tasks:    user_preferences?.force_split_tasks || false,
       }
     );
 

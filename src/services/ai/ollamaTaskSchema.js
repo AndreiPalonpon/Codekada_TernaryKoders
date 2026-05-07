@@ -58,6 +58,10 @@ const ollamaTaskSchema = {
             type: ["string", "null"],
             description: "The task_name of another task that must be completed before this one can start. Null if no dependency.",
           },
+          fixed_time: {
+            type: "boolean",
+            description: "True if the user specified an EXACT time for this task (e.g., 'Meeting at 3pm'). False if it is a general task to be scheduled flexibly.",
+          },
         },
         required: [
           "task_name",
@@ -65,6 +69,7 @@ const ollamaTaskSchema = {
           "cognitive_load",
           "preferred_window",
           "splittable",
+          "fixed_time",
         ],
       },
     },

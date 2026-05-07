@@ -1,14 +1,27 @@
 "use client";
 
-import React from "react";
-import { Upload, Link as LinkIcon, Sparkles, Loader2 } from "lucide-react";
+import React, { useState } from "react";
+import { Upload, Link as LinkIcon, Sparkles, Loader2, AlertTriangle } from "lucide-react";
 import useScheduleStore from "../../store/useScheduleStore";
+import ConfirmationModal from "../ui/ConfirmationModal";
 
 export default function MultimodalInput() {
   const textInput = useScheduleStore((state) => state.textInput);
   const setTextInput = useScheduleStore((state) => state.setTextInput);
   const generateSchedule = useScheduleStore((state) => state.generateSchedule);
   const isLoading = useScheduleStore((state) => state.isLoading);
+  const events = useScheduleStore((state) => state.events);
+
+  const [isOverwrite, setIsOverwrite] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  const handleAnalyze = () => {
+    if (isOverwrite && events.length > 0) {
+      setIsConfirmOpen(true);
+    } else {
+      generateSchedule("ws_8f92a", isOverwrite);
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
@@ -41,7 +54,29 @@ export default function MultimodalInput() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100">
+        {/* Overwrite Toggle */}
+        <div className="mt-4 flex items-center justify-between bg-white border border-slate-200 p-2.5 rounded-lg shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className={`p-1.5 rounded-md ${isOverwrite ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500'}`}>
+              <AlertTriangle size={14} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-800 leading-none">Overwrite Schedule</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Wipe existing events before generating.</p>
+            </div>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              className="sr-only peer" 
+              checked={isOverwrite}
+              onChange={(e) => setIsOverwrite(e.target.checked)}
+            />
+            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
           <div className="flex items-center gap-1">
             <button className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors group relative" title="Upload File">
               <Upload size={16} />
@@ -51,23 +86,36 @@ export default function MultimodalInput() {
             </button>
           </div>
           <button
-            onClick={() => generateSchedule("ws_8f92a")}
-            disabled={isLoading}
+            onClick={handleAnalyze}
+            disabled={isLoading || !textInput.trim()}
             className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all shadow-md flex items-center gap-2 group ${
-              isLoading
-                ? "bg-slate-400 cursor-not-allowed text-slate-200"
-                : "bg-slate-900 hover:bg-slate-800 hover:shadow-lg text-white"
+              isLoading || !textInput.trim()
+                ? "bg-slate-200 cursor-not-allowed text-slate-400 shadow-none"
+                : isOverwrite
+                  ? "bg-amber-600 hover:bg-amber-700 text-white hover:shadow-lg shadow-amber-600/20"
+                  : "bg-slate-900 hover:bg-slate-800 hover:shadow-lg text-white"
             }`}
           >
             {isLoading ? "Analyzing..." : "Analyze"}
             {isLoading ? (
-              <Loader2 size={16} className="animate-spin text-slate-300" />
+              <Loader2 size={16} className="animate-spin text-slate-400" />
             ) : (
-              <Sparkles size={16} className="text-emerald-400 group-hover:animate-pulse" />
+              <Sparkles size={16} className={isOverwrite ? "text-amber-200" : "text-emerald-400 group-hover:animate-pulse"} />
             )}
           </button>
         </div>
       </div>
+
+      <ConfirmationModal 
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={() => generateSchedule("ws_8f92a", isOverwrite)}
+        title="Overwrite Schedule?"
+        description="You have selected to overwrite your calendar. This will wipe all current scheduled tasks before generating the new ones. Do you want to proceed?"
+        confirmText="Overwrite"
+        cancelText="Cancel"
+        isDestructive={true}
+      />
     </div>
   );
 }

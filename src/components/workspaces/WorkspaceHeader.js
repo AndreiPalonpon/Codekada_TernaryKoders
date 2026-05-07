@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check } from "lucide-react";
+import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check, Settings } from "lucide-react";
 import useWorkspaceStore from "../../store/useWorkspaceStore";
+import SettingsModal from "./SettingsModal";
 
 export default function WorkspaceHeader({ 
   title = "Workspace", 
@@ -15,6 +16,7 @@ export default function WorkspaceHeader({
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState(null); // null | "sending" | "sent"
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const inviteMember = useWorkspaceStore((state) => state.inviteMember);
@@ -88,6 +90,13 @@ export default function WorkspaceHeader({
               title="Focus Mode"
             >
               <Zap size={18} className={isFocusMode ? 'fill-amber-500' : ''} />
+            </button>
+            <button 
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative" 
+              title="User Preferences"
+            >
+              <Settings size={20} />
             </button>
             <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative" title="Notifications">
               <Bell size={20} />
@@ -164,6 +173,10 @@ export default function WorkspaceHeader({
           </div>
         </div>
       </div>
+
+      {isSettingsModalOpen && (
+        <SettingsModal onClose={() => setIsSettingsModalOpen(false)} />
+      )}
     </header>
   );
 }

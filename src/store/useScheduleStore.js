@@ -38,12 +38,26 @@ const useScheduleStore = create((set, get) => ({
   /** Active cognitive-load filter: null = show all, or "High" | "Medium" | "Low". */
   activeFilter: null,
 
+  /** Dynamic user preferences for AI generation and Bin-Packing. */
+  userPreferences: {
+    exclude_times: [], // Array of string ranges, e.g., ["12:00-13:00"]
+    exclude_days: [],  // Array of days, e.g., ["Saturday", "Sunday"]
+    force_split_tasks: false,
+    deep_work_hours: ["09:00", "17:00"],
+    max_daily_load_minutes: 240,
+  },
+
   // ---------------------------------------------------------------------------
   // Primary Actions
   // ---------------------------------------------------------------------------
 
   /** Update the raw text input bound to the <textarea>. */
   setTextInput: (value) => set({ textInput: value }),
+
+  /** Update dynamic user preferences. */
+  updatePreferences: (newPrefs) => set((state) => ({ 
+    userPreferences: { ...state.userPreferences, ...newPrefs } 
+  })),
 
   /**
    * Sends the current multimodal inputs to the backend generation pipeline.
@@ -57,11 +71,15 @@ const useScheduleStore = create((set, get) => ({
    * `aiParsedTasks` (TaskBreakdown table). On failure `error` is set.
    *
    * @param {string} workspaceId - Workspace identifier (default "ws_8f92a").
+   * @param {boolean} overwrite - If true, clears the calendar before appending.
    */
-  generateSchedule: async (workspaceId = "ws_8f92a") => {
-    const { textInput, events } = get();
+  generateSchedule: async (workspaceId = "ws_8f92a", overwrite = false) => {
+    const { textInput, events, userPreferences } = get();
 
     set({ isLoading: true, error: null });
+
+    // If overwriting, clear the events first so they aren't passed to the backend as busy blocks.
+    const existingEvents = overwrite ? [] : events;
 
     try {
       const response = await fetch("/api/schedule/generate", {
@@ -70,11 +88,8 @@ const useScheduleStore = create((set, get) => ({
         body: JSON.stringify({
           workspace_id: workspaceId,
           inputs: [{ type: "text", content: textInput }],
-          existing_events: events,
-          user_preferences: {
-            deep_work_hours: ["09:00", "17:00"],
-            max_daily_load_minutes: 240,
-          },
+          existing_events: existingEvents,
+          user_preferences: userPreferences,
         }),
       });
 
@@ -82,8 +97,10 @@ const useScheduleStore = create((set, get) => ({
 
       if (result.success) {
         set((state) => ({
-          events: [...state.events, ...result.data],
-          aiParsedTasks: [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
+          events: overwrite ? result.data : [...state.events, ...result.data],
+          aiParsedTasks: overwrite 
+            ? (result.meta?.ai_tasks || []) 
+            : [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
         }));
       } else {
         set({ error: result.error });

@@ -184,6 +184,8 @@ const useScheduleStore = create((set, get) => ({
       if (result.success) {
         get().saveHistory();
         set((state) => ({
+          textInput: "",
+          attachments: [],
           events: overwrite ? [
             ...state.events.filter((event) => event.extendedProps?.source === "google_calendar"),
             ...result.data

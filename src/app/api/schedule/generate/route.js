@@ -25,6 +25,57 @@ function toValidObjectId(id) {
 }
 
 /**
+ * Server-side URL scraper to retrieve high-fidelity webpage content.
+ */
+async function fetchUrlContent(url) {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+      next: { revalidate: 60 },
+    });
+
+    if (!res.ok) {
+      return `[Failed to load link content: HTTP ${res.status}]`;
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    let body = await res.text();
+
+    if (contentType.includes("html") || body.trim().startsWith("<")) {
+      // Strip style and script blocks
+      body = body.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "");
+      body = body.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, "");
+      
+      // Strip HTML tags
+      body = body.replace(/<[^>]+>/g, " ");
+      
+      // Decode basic HTML entities
+      body = body
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"');
+
+      // Collapse duplicate whitespaces
+      body = body.replace(/\s+/g, " ").trim();
+      
+      // Prevent prompt token blow-up
+      if (body.length > 12000) {
+        body = body.slice(0, 12000) + "... [Content Truncated]";
+      }
+    }
+    
+    return body;
+  } catch (err) {
+    console.error(`Failed to fetch URL ${url}:`, err);
+    return `[Failed to fetch content from URL: ${err.message}]`;
+  }
+}
+
+/**
  * POST /api/schedule/generate
  *
  * Full two-phase scheduling pipeline:
@@ -237,11 +288,26 @@ export async function POST(request) {
         }
       }));
     } else {
+      // ── Resolve URL link inputs asynchronously first ──
+      const resolvedInputs = await Promise.all((inputs || []).map(async (i) => {
+        if (i.type === 'link') {
+          console.log(`[ROUTE LOGS] Resolving webpage content for link: ${i.content}`);
+          const pageContent = await fetchUrlContent(i.content);
+          return {
+            ...i,
+            resolvedContent: pageContent
+          };
+        }
+        return i;
+      }));
+
       // ── Parse multimodal inputs into the shapes the AI adapter expects ──
-      const textPrompt = (inputs || [])
+      const textPrompt = resolvedInputs
         .filter((i) => i.type === 'text' || i.type === 'link' || i.type === 'document')
         .map((i) => {
-          if (i.type === 'link') return `Attached link: ${i.content}`;
+          if (i.type === 'link') {
+            return `[Webpage text extracted from attached link "${i.content}"]: \n${i.resolvedContent}`;
+          }
           if (i.type === 'document') return `[Content from uploaded file "${i.name || 'document'}"]: \n${i.content}`;
           return i.content;
         })

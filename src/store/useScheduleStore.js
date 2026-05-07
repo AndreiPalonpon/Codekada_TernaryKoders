@@ -32,6 +32,9 @@ const useScheduleStore = create((set, get) => ({
   /** True while a recalculation (snooze/complete/delete) is in progress. */
   isRecalculating: false,
 
+  /** True while Google Calendar busy blocks are being fetched. */
+  isSyncingGoogleCalendar: false,
+
   /** Error object from the last failed operation, or null. */
   error: null,
 
@@ -60,6 +63,9 @@ const useScheduleStore = create((set, get) => ({
    */
   generateSchedule: async (workspaceId = "ws_8f92a") => {
     const { textInput, events } = get();
+    const schedulableExistingEvents = events.filter(
+      (event) => event.extendedProps?.source !== "google_calendar"
+    );
 
     set({ isLoading: true, error: null });
 
@@ -70,7 +76,7 @@ const useScheduleStore = create((set, get) => ({
         body: JSON.stringify({
           workspace_id: workspaceId,
           inputs: [{ type: "text", content: textInput }],
-          existing_events: events,
+          existing_events: schedulableExistingEvents,
           user_preferences: {
             deep_work_hours: ["09:00", "17:00"],
             max_daily_load_minutes: 240,
@@ -82,7 +88,10 @@ const useScheduleStore = create((set, get) => ({
 
       if (result.success) {
         set((state) => ({
-          events: [...state.events, ...result.data],
+          events: [
+            ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+            ...result.data,
+          ],
           aiParsedTasks: [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
         }));
       } else {
@@ -97,6 +106,65 @@ const useScheduleStore = create((set, get) => ({
       });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  /**
+   * Fetches Google Calendar events and renders them as read-only FullCalendar
+   * events. Generated tasks can then visually avoid those blocks.
+   */
+  syncGoogleCalendarBusy: async () => {
+    set({ isSyncingGoogleCalendar: true, error: null });
+
+    try {
+      const response = await fetch("/api/calendar/events");
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const apiError = result.error || {
+          code: "GOOGLE_CALENDAR_SYNC_FAILED",
+          message: "Failed to sync Google Calendar.",
+        };
+        set({ error: apiError });
+        return { success: false, error: apiError };
+      }
+
+      const googleEvents = (result.data?.events || []).map((event, index) => ({
+        id: `gcal_event_${event.id || index}_${event.start}_${event.end}`,
+        title: event.title || "(No title)",
+        start: event.start,
+        end: event.end,
+        backgroundColor: "#94a3b8",
+        borderColor: "#64748b",
+        display: "block",
+        extendedProps: {
+          source: "google_calendar",
+          readOnly: true,
+          google_event_id: event.id,
+          google_link: event.htmlLink,
+          description: event.description
+            ? `<p>${event.description}</p>`
+            : "<p>Imported from Google Calendar.</p>",
+        },
+      }));
+
+      set((state) => ({
+        events: [
+          ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+          ...googleEvents,
+        ],
+      }));
+
+      return { success: true, busyCount: googleEvents.length };
+    } catch (networkError) {
+      const error = {
+        code: "NETWORK_ERROR",
+        message: networkError.message || "Failed to reach the server.",
+      };
+      set({ error });
+      return { success: false, error };
+    } finally {
+      set({ isSyncingGoogleCalendar: false });
     }
   },
 

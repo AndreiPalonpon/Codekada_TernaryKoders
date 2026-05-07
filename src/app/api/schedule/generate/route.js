@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import serviceManager from '@/orchestrator/ServiceManager';
+import { authOptions } from '@/lib/auth';
+import { getGoogleCalendarEvents } from '@/lib/google/calendar';
 
 /**
  * POST /api/schedule/generate
@@ -50,6 +53,17 @@ const LOAD_COLORS = {
   Low:    { bg: '#f59e0b', border: '#d97706' }, // amber
 };
 
+function schedulerTimeRange() {
+  const timeMin = new Date();
+  const timeMax = new Date(timeMin);
+  timeMax.setDate(timeMax.getDate() + 14);
+
+  return {
+    timeMin: timeMin.toISOString(),
+    timeMax: timeMax.toISOString(),
+  };
+}
+
 /**
  * Returns a color pair for a given cognitive_load label.
  */
@@ -96,6 +110,27 @@ function mapScheduledToCalendarEvents(scheduledTasks) {
   return events;
 }
 
+function mapGoogleEventsToCalendarEvents(googleEvents) {
+  return googleEvents.map((event, index) => ({
+    id: `gcal_event_${event.id || index}_${event.start}_${event.end}`,
+    title: event.title || '(No title)',
+    start: event.start,
+    end: event.end,
+    backgroundColor: '#94a3b8',
+    borderColor: '#64748b',
+    display: 'block',
+    extendedProps: {
+      source: 'google_calendar',
+      readOnly: true,
+      google_event_id: event.id,
+      google_link: event.htmlLink,
+      description: event.description
+        ? `<p>${event.description}</p>`
+        : '<p>Imported from Google Calendar.</p>',
+    },
+  }));
+}
+
 // ── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request) {
@@ -129,6 +164,7 @@ export async function POST(request) {
 
   try {
     const { workspace_id, inputs, existing_events, user_preferences } = parseResult.data;
+    const session = await getServerSession(authOptions);
 
     // ── Parse multimodal inputs into the shapes the AI adapter expects ──
 
@@ -177,17 +213,41 @@ export async function POST(request) {
     }
 
     // ── Phase 2: The Hands (NUserBinPacking Scheduler) ──────────────────
-    // Maps the deep_work_hours frontend field to the scheduler's work window.
-    // Integrate existing events on the calendar as busy blocks so AI tasks schedule around them.
-    const busyBlocks = existing_events.map(ev => ({
+    // Maps local app events and Google Calendar free/busy blocks into the
+    // scheduler's busy shape so generated tasks land in real open gaps.
+    const localBusyBlocks = existing_events.map(ev => ({
       start: ev.start,
       end: ev.end,
     }));
 
+    let googleCalendarEvents = [];
+    let googleCalendarSync = 'skipped';
+
+    if (session?.user?.email) {
+      try {
+        const { timeMin, timeMax } = schedulerTimeRange();
+        googleCalendarEvents = await getGoogleCalendarEvents({
+          email: session.user.email,
+          timeMin,
+          timeMax,
+        });
+        googleCalendarSync = 'connected';
+      } catch (calendarError) {
+        console.warn('Google Calendar busy fetch failed:', calendarError.message);
+        googleCalendarSync = 'failed';
+      }
+    }
+
+    const googleBusyBlocks = googleCalendarEvents.map((event) => ({
+      start: event.start,
+      end: event.end,
+    }));
+    const busyBlocks = [...localBusyBlocks, ...googleBusyBlocks];
+
     const scheduler = serviceManager.getScheduler();
     const { scheduled, unscheduled, full } = scheduler.schedule(
       aiTasks,
-      [{ busy: busyBlocks }],   // Pass existing tasks to find open gaps
+      [{ busy: busyBlocks }],
       {
         work_day_start:       user_preferences?.deep_work_hours?.[0] || '09:00',
         work_day_end:         user_preferences?.deep_work_hours?.[1] || '17:00',
@@ -198,7 +258,10 @@ export async function POST(request) {
 
     // ── Map to FullCalendar events ──────────────────────────────────────
 
-    const calendarEvents = mapScheduledToCalendarEvents(scheduled);
+    const calendarEvents = [
+      ...mapGoogleEventsToCalendarEvents(googleCalendarEvents),
+      ...mapScheduledToCalendarEvents(scheduled),
+    ];
 
     const processingMs = Date.now() - startTime;
     return NextResponse.json(
@@ -210,6 +273,10 @@ export async function POST(request) {
           timestamp: new Date().toISOString(),
           processing_ms: processingMs,
           ai_tasks: aiTasks,  // Phase 1 raw output for TaskBreakdown display
+          google_calendar: {
+            status: googleCalendarSync,
+            busy_blocks: googleCalendarEvents.length,
+          },
         },
       },
       { status: 200 }

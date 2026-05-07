@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check } from "lucide-react";
+import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check, LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 export default function WorkspaceHeader({ 
@@ -95,6 +96,15 @@ export default function WorkspaceHeader({
             </button>
           </div>
         )}
+
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+          title="Sign out"
+        >
+          <LogOut size={14} />
+          Sign out
+        </button>
 
         {/* Team Collaboration Module */}
         <div className="flex items-center gap-3">

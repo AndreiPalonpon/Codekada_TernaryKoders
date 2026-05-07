@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import { Filter, Download, X } from "lucide-react";
+import { Filter, Download, X, RefreshCw } from "lucide-react";
 import EventDetailsModal from "./EventDetailsModal";
 import useScheduleStore from "../../store/useScheduleStore";
 
@@ -20,6 +20,8 @@ export default function CalendarView() {
   }, [rawEvents, activeFilter]);
   const setFilter = useScheduleStore((state) => state.setFilter);
   const clearSchedule = useScheduleStore((state) => state.clearSchedule);
+  const syncGoogleCalendarBusy = useScheduleStore((state) => state.syncGoogleCalendarBusy);
+  const isSyncingGoogleCalendar = useScheduleStore((state) => state.isSyncingGoogleCalendar);
 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -43,6 +45,19 @@ export default function CalendarView() {
   };
 
   const closePopup = () => setSelectedEvent(null);
+
+  const handleGoogleCalendarSync = async () => {
+    const result = await syncGoogleCalendarBusy();
+
+    if (!result.success) {
+      alert(result.error?.message || "Google Calendar sync failed.");
+      return;
+    }
+
+    if (result.busyCount === 0) {
+      alert("Google Calendar connected, but no busy blocks were found in the next 7 days.");
+    }
+  };
 
   /**
    * Exports the current calendar events as a downloadable JSON file.
@@ -143,12 +158,14 @@ export default function CalendarView() {
 
           <div className="w-px h-6 bg-slate-200 mx-1"></div>
 
-          {/* Sync to Google Cal (future — shows toast) */}
+          {/* Sync Google Calendar busy blocks into the visible schedule. */}
           <button
-            onClick={() => alert("Google Calendar sync requires OAuth setup. Coming soon!")}
-            className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded transition-colors shadow-sm"
+            onClick={handleGoogleCalendarSync}
+            disabled={isSyncingGoogleCalendar}
+            className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 rounded transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
           >
-            Sync to Google Cal
+            <RefreshCw size={14} className={isSyncingGoogleCalendar ? "animate-spin" : ""} />
+            {isSyncingGoogleCalendar ? "Syncing..." : "Sync Google Cal"}
           </button>
         </div>
       </div>

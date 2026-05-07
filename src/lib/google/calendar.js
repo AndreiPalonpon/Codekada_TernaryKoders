@@ -72,3 +72,36 @@ export async function getGoogleCalendarBusyBlocks({ email, timeMin, timeMax }) {
 
   return response.data.calendars?.primary?.busy || [];
 }
+
+export async function getGoogleCalendarEvents({ email, timeMin, timeMax }) {
+  await dbConnect();
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    throw new Error("User profile was not found.");
+  }
+
+  const auth = await ensureFreshGoogleCredentials(user);
+  const calendar = google.calendar({ version: "v3", auth });
+
+  const response = await calendar.events.list({
+    calendarId: "primary",
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: "startTime",
+    maxResults: 250,
+  });
+
+  return (response.data.items || [])
+    .filter((event) => event.status !== "cancelled")
+    .map((event) => ({
+      id: event.id,
+      title: event.summary || "(No title)",
+      description: event.description || "",
+      htmlLink: event.htmlLink || "",
+      start: event.start?.dateTime || event.start?.date,
+      end: event.end?.dateTime || event.end?.date,
+    }))
+    .filter((event) => event.start && event.end);
+}

@@ -55,7 +55,9 @@ Examples of resolution (assuming today is Wednesday 2026-05-06):
   - "2 days before X" → deadline must be 2 days before X's start_after date
 
 RECURRING & FREQUENCY RULES:
-If the user requests a recurring task (e.g. "every day", "daily", "every week", "every Tuesday"), you MUST expand this frequency and generate SEPARATE, INDEPENDENT task objects for EACH individual occurrence from today's date onwards up to the next 7 days (or up to the specified exam/event deadline). Do NOT output a single task representing the recurrence; output multiple task objects (e.g. one daily task object for each day).
+If the user requests a recurring task (e.g. "every day", "daily", "every week", "every Tuesday"), you MUST generate exactly ONE task object representing the entire series. Do NOT expand the occurrences yourself.
+Inside the metadata, populate the 'recurrence' object with 'frequency' ("DAILY", "WEEKLY", "MONTHLY"), 'interval' (e.g., 1 for every week), and 'days_of_week' (an array of short day strings like ["MO", "WE"] if applicable).
+For one-off tasks, leave 'recurrence' null.
 
 PLANNING TIME LIMITS & DEFAULT BUFFER SCOPE:
 Do NOT generate any tasks or recurrences that extend past a maximum 14-day look-ahead window starting from the current date. This provides a safety time buffer so that tasks do not get scheduled indefinitely or in an infinite time scope.

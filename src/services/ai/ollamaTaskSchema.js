@@ -62,6 +62,19 @@ const ollamaTaskSchema = {
             type: "boolean",
             description: "True if the user specified an EXACT time for this task (e.g., 'Meeting at 3pm'). False if it is a general task to be scheduled flexibly.",
           },
+          recurrence: {
+            type: ["object", "null"],
+            description: "Recurrence pattern if the task repeats (e.g., 'every Monday', 'daily'). Null if it's a one-off task.",
+            properties: {
+              frequency: { type: "string", enum: ["DAILY", "WEEKLY", "MONTHLY"] },
+              interval: { type: "integer", description: "Multiplier for frequency (e.g., 1 for every week, 2 for every other week)." },
+              days_of_week: {
+                type: "array",
+                description: "Array of days if WEEKLY frequency (e.g., ['MO', 'WE', 'FR']).",
+                items: { type: "string", enum: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] }
+              }
+            }
+          },
         },
         required: [
           "task_name",

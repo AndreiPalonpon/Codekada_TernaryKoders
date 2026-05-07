@@ -12,6 +12,8 @@ import useWorkspaceStore from "./useWorkspaceStore";
  * Secondary actions handle recalculation (snooze, complete, delete)
  * and local UI state (filters, clearing).
  */
+const MAX_UNDO_HISTORY = 5;
+
 const useScheduleStore = create((set, get) => ({
 
   // ---------------------------------------------------------------------------
@@ -20,6 +22,44 @@ const useScheduleStore = create((set, get) => ({
 
   /** FullCalendar-compatible event objects rendered on the calendar. */
   events: [],
+
+  /** Undo stack for local calendar state */
+  history: [],
+
+  saveHistory: () => {
+    set((state) => {
+      const newHistory = [...state.history, state.events];
+      if (newHistory.length > MAX_UNDO_HISTORY) {
+        newHistory.shift();
+      }
+      return { history: newHistory };
+    });
+  },
+
+  undo: () => {
+    set((state) => {
+      if (!state.history || state.history.length === 0) return state;
+      const newHistory = [...state.history];
+      const previousEvents = newHistory.pop();
+      return { events: previousEvents, history: newHistory };
+    });
+  },
+
+  syncAllToGoogleCalendar: async () => {
+    const { events, addEventToGoogleCalendar } = get();
+    // Only push local tasks that haven't been exported yet
+    const localEvents = events.filter(e => 
+       e.extendedProps?.source !== 'google_calendar' && 
+       !e.extendedProps?.exported_to_google_calendar
+    );
+    
+    let successCount = 0;
+    for (const event of localEvents) {
+      const res = await addEventToGoogleCalendar(event);
+      if (res.success) successCount++;
+    }
+    return { success: true, count: successCount };
+  },
 
   /** Raw text bound to the multimodal input textarea. */
   textInput: "",
@@ -121,9 +161,13 @@ const useScheduleStore = create((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
+        get().saveHistory();
         set((state) => ({
-          events: overwrite ? result.data : [
-            ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+          events: overwrite ? [
+            ...state.events.filter((event) => event.extendedProps?.source === "google_calendar"),
+            ...result.data
+          ] : [
+            ...state.events,
             ...result.data,
           ],
           aiParsedTasks: overwrite
@@ -175,9 +219,13 @@ const useScheduleStore = create((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
+        get().saveHistory();
         set((state) => ({
-          events: overwrite ? result.data : [
-            ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+          events: overwrite ? [
+            ...state.events.filter((event) => event.extendedProps?.source === "google_calendar"),
+            ...result.data
+          ] : [
+            ...state.events,
             ...result.data,
           ],
           aiParsedTasks: overwrite
@@ -335,8 +383,10 @@ const useScheduleStore = create((set, get) => ({
    *
    * @param {string} taskId       - The event ID to snooze.
    * @param {number} delayMinutes - Minutes to delay (default 30).
+   * @param {string} reason       - User's reason for snoozing.
+   * @param {Object} options      - { applyToFuture: boolean, blockStart: string } to handle recurring tasks.
    */
-  snoozeTask: async (taskId, delayMinutes = 30, reason = "") => {
+  snoozeTask: async (taskId, delayMinutes = 30, reason = "", options = { applyToFuture: false, blockStart: null }) => {
     set({ isRecalculating: true, error: null });
 
     try {
@@ -351,6 +401,8 @@ const useScheduleStore = create((set, get) => ({
           busy_blocks: [{ busy: [] }],
           triggered_by: "user_mvp",
           snooze_reason: reason,
+          apply_to_future: options.applyToFuture,
+          block_start: options.blockStart
         }),
       });
 
@@ -360,6 +412,17 @@ const useScheduleStore = create((set, get) => ({
         // Enrich returned events with local snooze audit log
         const enrichedEvents = result.data.scheduled.map((e) => {
           if (e.id !== taskId) return e;
+          
+          if (options.blockStart) {
+             const eStart = new Date(e.start).getTime();
+             const bStart = new Date(options.blockStart).getTime();
+             if (options.applyToFuture) {
+                 if (eStart < bStart) return e;
+             } else {
+                 if (eStart !== bStart) return e;
+             }
+          }
+
           let desc = e.description || e.extendedProps?.description || "";
           if (reason.trim()) {
             desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
@@ -372,12 +435,27 @@ const useScheduleStore = create((set, get) => ({
             }
           };
         });
-        set({ events: enrichedEvents });
+        const { events } = get();
+        get().saveHistory();
+        const googleEvents = events.filter(e => e.extendedProps?.source === "google_calendar");
+        set({ events: [...googleEvents, ...enrichedEvents] });
       } else {
         // Optimistic local fallback: Shift the event forward instead of deleting it!
         const { events } = get();
+        get().saveHistory();
         const shiftedEvents = events.map((e) => {
           if (e.id !== taskId) return e;
+          
+          if (options.blockStart) {
+             const eStart = new Date(e.start).getTime();
+             const bStart = new Date(options.blockStart).getTime();
+             if (options.applyToFuture) {
+                 if (eStart < bStart) return e;
+             } else {
+                 if (eStart !== bStart) return e;
+             }
+          }
+
           const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
           const newEnd = e.end ? new Date(new Date(e.end).getTime() + delayMinutes * 60000) : null;
           let desc = e.extendedProps?.description || "";
@@ -399,6 +477,7 @@ const useScheduleStore = create((set, get) => ({
     } catch {
       // Offline / no DB — optimistic local shifting fallback
       const { events } = get();
+      get().saveHistory();
       const shiftedEvents = events.map((e) => {
         if (e.id !== taskId) return e;
         const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
@@ -449,6 +528,7 @@ const useScheduleStore = create((set, get) => ({
 
     // Optimistic removal regardless of backend response.
     const { events } = get();
+    get().saveHistory();
     set({
       events: events.filter((e) => e.id !== taskId),
       isRecalculating: false,
@@ -461,6 +541,7 @@ const useScheduleStore = create((set, get) => ({
    */
   deleteTask: async (taskId) => {
     const { events } = get();
+    get().saveHistory();
     set({ events: events.filter((e) => e.id !== taskId) });
 
     try {

@@ -115,13 +115,13 @@ class PipelineFacade {
     }
     await interruptedTask.save();
 
-    // Fetch all remaining Pending/Snoozed tasks for this workspace to re-pack.
-    const pendingTasks = await Task.find({
+    // Fetch all active tasks (Scheduled, Pending, Snoozed) to re-pack and shift them around if needed.
+    const activeTasks = await Task.find({
       workspace_id: workspaceId,
-      status: { $in: ['Pending', 'Snoozed'] },
+      status: { $in: ['Pending', 'Snoozed', 'Scheduled'] },
     }).lean();
 
-    if (pendingTasks.length === 0) {
+    if (activeTasks.length === 0) {
       return this._successResponse({ scheduled: [], unscheduled: [], full: false }, Date.now() - startTime);
     }
 
@@ -133,7 +133,7 @@ class PipelineFacade {
 
     // Re-run the scheduler on all remaining tasks.
     const scheduler = serviceManager.getScheduler();
-    const { scheduled, unscheduled, full } = scheduler.schedule(pendingTasks, busyBlocks, userPrefs);
+    const { scheduled, unscheduled, full } = scheduler.schedule(activeTasks, busyBlocks, userPrefs);
 
     // Persist the rescheduled blocks.
     for (const task of scheduled) {

@@ -62,6 +62,20 @@ const openApiTaskSchema = {
             type: "BOOLEAN",
             description: "True if the user specified an EXACT time for this task (e.g., 'Meeting at 3pm'). False if it is a general task to be scheduled flexibly.",
           },
+          recurrence: {
+            type: "OBJECT",
+            description: "Recurrence pattern if the task repeats (e.g., 'every Monday', 'daily'). Null if it's a one-off task.",
+            nullable: true,
+            properties: {
+              frequency: { type: "STRING", enum: ["DAILY", "WEEKLY", "MONTHLY"] },
+              interval: { type: "INTEGER", description: "Multiplier for frequency (e.g., 1 for every week, 2 for every other week)." },
+              days_of_week: {
+                type: "ARRAY",
+                description: "Array of days if WEEKLY frequency (e.g., ['MO', 'WE', 'FR']).",
+                items: { type: "STRING", enum: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] }
+              }
+            }
+          },
         },
         required: [
           "task_name",

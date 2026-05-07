@@ -20,7 +20,7 @@ const CalendarView = dynamic(() => import("@/components/schedule-view/CalendarVi
     </div>
   )
 });
-import { ChevronRight, ChevronLeft, Bot, ListChecks } from "lucide-react";
+import { ChevronRight, ChevronLeft, Bot, ListChecks, Undo2, CloudUpload } from "lucide-react";
 
 export default function WorkspacePage() {
   const [isRightExpanded, setIsRightExpanded] = useState(true);
@@ -30,12 +30,25 @@ export default function WorkspacePage() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const loadSchedule = useScheduleStore((state) => state.loadSchedule);
   const isLoading = useScheduleStore((state) => state.isLoading);
+  const isWritingGoogleCalendar = useScheduleStore((state) => state.isWritingGoogleCalendar);
+  const syncAllToGoogleCalendar = useScheduleStore((state) => state.syncAllToGoogleCalendar);
+  const undo = useScheduleStore((state) => state.undo);
+  const history = useScheduleStore((state) => state.history);
 
   useEffect(() => {
     if (activeWorkspaceId) {
       loadSchedule(activeWorkspaceId);
     }
   }, [activeWorkspaceId, loadSchedule]);
+
+  const handleSyncAll = async () => {
+    const res = await syncAllToGoogleCalendar();
+    if (res.success) {
+      alert(`Successfully synced ${res.count} tasks to Google Calendar.`);
+    } else {
+      alert("Failed to sync some tasks.");
+    }
+  };
 
   return (
     <WorkspaceLayout>
@@ -56,8 +69,35 @@ export default function WorkspacePage() {
         )}
         
         {/* Center Stage: Mathematical Scheduler Visualizer */}
-        <div className="flex-1 h-full min-w-0 transition-all duration-300">
-          <CalendarView />
+        <div className="flex-1 h-full min-w-0 transition-all duration-300 flex flex-col gap-3">
+          <div className="flex items-center justify-between bg-white px-4 py-2 border border-slate-200 rounded-xl shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              Live Schedule
+            </h2>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={undo}
+                disabled={history.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Undo last action"
+              >
+                <Undo2 size={14} />
+                Undo
+              </button>
+              <button 
+                onClick={handleSyncAll}
+                disabled={isWritingGoogleCalendar}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
+              >
+                <CloudUpload size={14} className={isWritingGoogleCalendar ? "animate-pulse" : ""} />
+                {isWritingGoogleCalendar ? "Syncing..." : "Sync All to GCal"}
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+            <CalendarView />
+          </div>
         </div>
 
         {/* Right Sidebar: AI Assistant (Input & Output) */}

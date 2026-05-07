@@ -56,16 +56,37 @@ class NUserBinPacking extends ISchedulerEngine {
       return { scheduled: [], unscheduled: [], full: false };
     }
 
+    const recurringTasks = tasks.filter(t => t.metadata?.recurrence != null);
+    const oneOffTasks = tasks.filter(t => t.metadata?.recurrence == null);
+
+    const scheduledRecurring = [];
+    const recurringConstraints = [];
+
+    // Step 1: Project recurring tasks up to 30 days and treat as hard constraints
+    for (const rTask of recurringTasks) {
+      const blocks = this._projectRecurringTask(rTask, Math.max(30, this.lookAheadDays), userPrefs);
+      scheduledRecurring.push({ ...rTask, schedule_blocks: blocks });
+      
+      for (const block of blocks) {
+        recurringConstraints.push({
+          start: new Date(block.start_time),
+          end: new Date(block.end_time)
+        });
+      }
+    }
+
     // Convert exclude_times into daily busy blocks pattern
     const recurringBusyBlocks = exclude_times.map(timeRange => {
       const [start, end] = timeRange.split('-');
       return { startStr: start.trim(), endStr: end.trim() };
     });
 
-    // Step 1: Build a merged list of all busy blocks across all calendars.
+    // Step 2: Build a merged list of all busy blocks (calendars + projected recurring tasks).
     const allBusyBlocks = this._mergeAndSortBusyBlocks(calendars);
+    allBusyBlocks.push(...recurringConstraints);
+    allBusyBlocks.sort((a, b) => a.start - b.start);
 
-    // Step 2: Generate all free bins within the look-ahead window.
+    // Step 3: Generate all free bins within the look-ahead window.
     const freeBins = this._generateFreeBins(
       allBusyBlocks,
       work_day_start,
@@ -77,18 +98,17 @@ class NUserBinPacking extends ISchedulerEngine {
     );
 
     if (freeBins.length === 0) {
-      return { scheduled: [], unscheduled: tasks, full: true };
+      return { scheduled: scheduledRecurring, unscheduled: oneOffTasks, full: true };
     }
 
-    // Step 3: Sort tasks by deadline urgency, then by priority.
-    const sortedTasks = this._sortTasksByUrgency(tasks);
+    // Step 4: Sort one-off tasks by deadline urgency, then by priority.
+    const sortedOneOffTasks = this._sortTasksByUrgency(oneOffTasks);
 
-    // Step 4: Greedily fit each task into the earliest VALID free bin,
-    //         respecting start_after and deadline constraints.
-    const scheduled = [];
+    // Step 5: Greedily fit each one-off task into the earliest VALID free bin.
+    const scheduled = [...scheduledRecurring];
     const unscheduled = [];
 
-    for (const task of sortedTasks) {
+    for (const task of sortedOneOffTasks) {
       const result = this._fitTaskIntoBins(task, freeBins, deep_work_max_minutes, buffer_minutes, force_split_tasks);
 
       if (result.blocks.length > 0) {
@@ -248,6 +268,85 @@ class NUserBinPacking extends ISchedulerEngine {
       const sB = b.metadata?.start_after ? new Date(b.metadata.start_after) : new Date(0);
       return sA - sB;
     });
+  }
+
+  /**
+   * Projects a recurring task over a specified time horizon to generate fixed schedule blocks.
+   * @param {Object} task - The recurring task object.
+   * @param {number} lookAheadDays - Number of days to project forward.
+   * @param {Object} userPrefs - Contains work_day_start.
+   * @returns {Array<Object>} Projected schedule blocks.
+   */
+  _projectRecurringTask(task, lookAheadDays, userPrefs) {
+    const blocks = [];
+    const recurrence = task.metadata?.recurrence;
+    if (!recurrence) return blocks;
+
+    const freq = recurrence.frequency || "DAILY";
+    const interval = recurrence.interval || 1;
+    const daysOfWeek = recurrence.days_of_week || [];
+    const duration = task.metadata.estimated_minutes || 60;
+    
+    // Reference time: use start_after if provided, else userPrefs.work_day_start or 09:00
+    let baseTime = new Date();
+    if (task.metadata.start_after) {
+       const parsed = new Date(task.metadata.start_after);
+       if (!isNaN(parsed.getTime())) {
+          baseTime = parsed;
+       }
+    } else {
+       const [h, m] = (userPrefs.work_day_start || '09:00').split(':').map(Number);
+       baseTime.setHours(h, m, 0, 0);
+    }
+
+    const now = new Date();
+    let currentDayIter = new Date(baseTime);
+    if (currentDayIter < now) {
+       // if baseTime is past, align to today but keep time
+       currentDayIter = new Date();
+       currentDayIter.setHours(baseTime.getHours(), baseTime.getMinutes(), 0, 0);
+    }
+
+    const limit = addDays(now, Math.max(30, lookAheadDays));
+    const dayMap = { "SU": 0, "MO": 1, "TU": 2, "WE": 3, "TH": 4, "FR": 5, "SA": 6 };
+
+    let daysPassed = 0;
+
+    while (currentDayIter < limit) {
+      let isMatch = false;
+
+      if (freq === "DAILY") {
+        if (daysPassed % interval === 0) isMatch = true;
+      } else if (freq === "WEEKLY") {
+        const weekNum = Math.floor(daysPassed / 7);
+        if (weekNum % interval === 0) {
+           const dName = currentDayIter.getDay();
+           if (daysOfWeek.length === 0 || daysOfWeek.map(d => dayMap[d]).includes(dName)) {
+             isMatch = true;
+           }
+        }
+      } else if (freq === "MONTHLY") {
+        if (currentDayIter.getDate() === baseTime.getDate()) {
+           isMatch = true;
+        }
+      }
+
+      if (isMatch) {
+         const blockStart = new Date(currentDayIter);
+         const blockEnd = addMinutes(blockStart, duration);
+         blocks.push({
+           start_time: formatISO(blockStart),
+           end_time: formatISO(blockEnd),
+           calendar_event_id: null,
+           is_recurring: true
+         });
+      }
+
+      currentDayIter = addDays(currentDayIter, 1);
+      daysPassed++;
+    }
+
+    return blocks;
   }
 
   /**

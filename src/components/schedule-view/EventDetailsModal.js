@@ -245,10 +245,10 @@ export default function EventDetailsModal({ event, onClose }) {
               >
                 <CalendarPlus size={16} />
                 {isWritingGoogleCalendar
-                  ? "Adding..."
+                  ? "Syncing..."
                   : isExportedToGoogleCalendar
-                    ? "Added to Google"
-                    : "Add to Google"}
+                    ? "Synced to GCal"
+                    : "Sync to GCal"}
               </button>
             )}
             <button

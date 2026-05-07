@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical, Plus } from "lucide-react";
 import { FolderKanban, CalendarDays } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 // Helper to render dynamic icons
@@ -18,6 +19,7 @@ export default function WorkspaceSidebar({
   topWidgets = null,
   bottomWidgets = null 
 }) {
+  const { data: session } = useSession();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
@@ -166,12 +168,18 @@ export default function WorkspaceSidebar({
           onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
           className="flex items-center gap-3 w-full text-left hover:bg-slate-50 p-1 -m-1 rounded-lg transition-colors group"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm border-2 border-white">
-            ST
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-sm border-2 border-white overflow-hidden">
+            {session?.user?.image ? (
+              <img src={session.user.image} alt={session.user.name} className="w-full h-full object-cover" />
+            ) : (
+              session?.user?.name?.charAt(0) || "U"
+            )}
           </div>
           {isExpanded && (
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition-colors">SmartyToonster</p>
+              <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-emerald-700 transition-colors">
+                {session?.user?.name || "User"}
+              </p>
               <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Pro Plan</p>
             </div>
           )}
@@ -182,8 +190,8 @@ export default function WorkspaceSidebar({
             <div className="fixed inset-0 z-40" onClick={() => setIsProfileMenuOpen(false)}></div>
             <div className="absolute bottom-full left-4 mb-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50 animate-in slide-in-from-bottom-2 fade-in duration-200">
               <div className="px-4 py-2 border-b border-slate-100 mb-2">
-                <p className="text-sm font-bold text-slate-900">SmartyToonster</p>
-                <p className="text-xs text-slate-500">smarty@codekada.com</p>
+                <p className="text-sm font-bold text-slate-900">{session?.user?.name || "User"}</p>
+                <p className="text-xs text-slate-500">{session?.user?.email || "No email"}</p>
               </div>
               <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-emerald-600 flex items-center gap-2 transition-colors">
                 <Settings size={16} /> Account Settings
@@ -192,7 +200,10 @@ export default function WorkspaceSidebar({
                 <CreditCard size={16} /> Billing & Plan
               </button>
               <div className="my-2 border-t border-slate-100"></div>
-              <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors">
+              <button 
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
                 <LogOut size={16} /> Sign out
               </button>
             </div>

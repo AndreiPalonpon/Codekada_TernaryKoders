@@ -59,7 +59,7 @@ const useScheduleStore = create((set, get) => ({
    * @param {string} workspaceId - Workspace identifier (default "ws_8f92a").
    */
   generateSchedule: async (workspaceId = "ws_8f92a") => {
-    const { textInput } = get();
+    const { textInput, events } = get();
 
     set({ isLoading: true, error: null });
 
@@ -70,6 +70,7 @@ const useScheduleStore = create((set, get) => ({
         body: JSON.stringify({
           workspace_id: workspaceId,
           inputs: [{ type: "text", content: textInput }],
+          existing_events: events,
           user_preferences: {
             deep_work_hours: ["09:00", "17:00"],
             max_daily_load_minutes: 240,
@@ -80,10 +81,10 @@ const useScheduleStore = create((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
-        set({
-          events: result.data,
-          aiParsedTasks: result.meta?.ai_tasks || [],
-        });
+        set((state) => ({
+          events: [...state.events, ...result.data],
+          aiParsedTasks: [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
+        }));
       } else {
         set({ error: result.error });
       }

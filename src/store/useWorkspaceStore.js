@@ -42,6 +42,28 @@ const useWorkspaceStore = create((set, get) => ({
   setActiveWorkspace: (workspaceId) => set({ activeWorkspaceId: workspaceId }),
 
   /**
+   * Fetches all workspaces from the backend.
+   */
+  fetchWorkspaces: async () => {
+    set({ isFetching: true, error: null });
+    try {
+      const response = await fetch("/api/workspaces");
+      const result = await response.json();
+      if (result.success) {
+        set({ workspaces: result.data });
+      } else {
+        set({ error: result.error });
+      }
+    } catch (err) {
+      set({ 
+        error: { code: 'FETCH_ERROR', message: err.message || "Failed to fetch workspaces." } 
+      });
+    } finally {
+      set({ isFetching: false });
+    }
+  },
+
+  /**
    * Creates a new workspace via the backend API.
    * Falls back to optimistic local creation if the API is unavailable.
    *

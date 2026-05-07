@@ -31,6 +31,12 @@ const GenerateRequestSchema = z.object({
       content: z.string(),
     })
   ).min(1, 'At least one input is required.'),
+  existing_events: z.array(
+    z.object({
+      start: z.string(),
+      end: z.string(),
+    }).passthrough()
+  ).optional().default([]),
   user_preferences: z.object({
     deep_work_hours: z.array(z.string()).optional().default(['09:00', '17:00']),
     max_daily_load_minutes: z.number().optional().default(240),
@@ -122,7 +128,7 @@ export async function POST(request) {
   }
 
   try {
-    const { workspace_id, inputs, user_preferences } = parseResult.data;
+    const { workspace_id, inputs, existing_events, user_preferences } = parseResult.data;
 
     // ── Parse multimodal inputs into the shapes the AI adapter expects ──
 
@@ -172,12 +178,16 @@ export async function POST(request) {
 
     // ── Phase 2: The Hands (NUserBinPacking Scheduler) ──────────────────
     // Maps the deep_work_hours frontend field to the scheduler's work window.
-    // MVP: no Google Calendar integration yet, so busy blocks are empty.
+    // Integrate existing events on the calendar as busy blocks so AI tasks schedule around them.
+    const busyBlocks = existing_events.map(ev => ({
+      start: ev.start,
+      end: ev.end,
+    }));
 
     const scheduler = serviceManager.getScheduler();
     const { scheduled, unscheduled, full } = scheduler.schedule(
       aiTasks,
-      [{ busy: [] }],   // MVP: no external busy blocks
+      [{ busy: busyBlocks }],   // Pass existing tasks to find open gaps
       {
         work_day_start:       user_preferences?.deep_work_hours?.[0] || '09:00',
         work_day_end:         user_preferences?.deep_work_hours?.[1] || '17:00',

@@ -1,5 +1,57 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import dbConnect from '@/lib/mongodb';
+import Workspace from '@/models/Workspace';
+
+/**
+ * GET /api/workspaces
+ *
+ * Fetches all workspaces where the current authenticated user is a member.
+ */
+export async function GET() {
+  const startTime = Date.now();
+  
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in.' } },
+        { status: 401 }
+      );
+    }
+
+    await dbConnect();
+    
+    // Find workspaces where the user is in the members array.
+    const workspaces = await Workspace.find({
+      'members.user_id': session.user.id
+    }).sort({ updatedAt: -1 });
+
+    // Map to the shape the frontend expects.
+    const formatted = workspaces.map(ws => ({
+      id: ws._id.toString(),
+      name: ws.workspace_name,
+      type: ws.members.find(m => m.user_id === session.user.id)?.role === 'Owner' ? 'Personal' : 'Team Workspace',
+      color: "bg-emerald-500", // Cycle colors in the UI if needed
+      iconName: "FolderKanban",
+      createdAt: ws.createdAt,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: formatted,
+      error: null,
+      meta: { timestamp: new Date().toISOString(), processing_ms: Date.now() - startTime },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'FETCH_FAILED', message: err.message } },
+      { status: 500 }
+    );
+  }
+}
 
 /**
  * POST /api/workspaces

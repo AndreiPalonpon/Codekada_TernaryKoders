@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Bell, Settings, Plus, FolderKanban, CalendarDays, MoreVertical, LayoutGrid, List } from "lucide-react";
+import { useSession } from "next-auth/react";
 import useWorkspaceStore from "@/store/useWorkspaceStore";
 
 const renderIcon = (iconName, props) => {
@@ -12,12 +13,22 @@ const renderIcon = (iconName, props) => {
 
 export default function EnvironmentPicker() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [viewMode, setViewMode] = useState('grid');
 
   const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
   const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const isCreating = useWorkspaceStore((state) => state.isCreating);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchWorkspaces();
+    } else if (status === "unauthenticated") {
+      router.push("/login");
+    }
+  }, [status, fetchWorkspaces, router]);
 
   const handleOpenEnv = (workspaceId) => {
     setActiveWorkspace(workspaceId);
@@ -55,7 +66,18 @@ export default function EnvironmentPicker() {
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
           </button>
           <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"><Settings size={20} /></button>
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-white ml-2 cursor-pointer hover:shadow-md transition-shadow">ST</div>
+          <div className="flex items-center gap-2 cursor-pointer group">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-white ml-2 overflow-hidden hover:shadow-md transition-shadow">
+              {session?.user?.image ? (
+                <img src={session.user.image} alt={session.user.name} className="w-full h-full object-cover" />
+              ) : (
+                session?.user?.name?.charAt(0) || "U"
+              )}
+            </div>
+            <span className="text-sm font-semibold text-slate-700 group-hover:text-emerald-600 transition-colors hidden sm:inline">
+              {session?.user?.name || "User"}
+            </span>
+          </div>
         </div>
       </header>
       

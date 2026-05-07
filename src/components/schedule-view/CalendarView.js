@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -9,8 +9,15 @@ import EventDetailsModal from "./EventDetailsModal";
 import useScheduleStore from "../../store/useScheduleStore";
 
 export default function CalendarView() {
-  const events = useScheduleStore((state) => state.getFilteredEvents());
+  const rawEvents = useScheduleStore((state) => state.events);
   const activeFilter = useScheduleStore((state) => state.activeFilter);
+
+  const events = useMemo(() => {
+    if (!activeFilter) return rawEvents;
+    return rawEvents.filter(
+      (e) => e.extendedProps?.cognitive_load === activeFilter
+    );
+  }, [rawEvents, activeFilter]);
   const setFilter = useScheduleStore((state) => state.setFilter);
   const clearSchedule = useScheduleStore((state) => state.clearSchedule);
 

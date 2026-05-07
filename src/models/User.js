@@ -5,6 +5,7 @@ const UserProfileSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   auth_provider_id: { type: String, required: true }, // e.g., Google sub ID
+  password: { type: String }, // Hashed password for credentials-based users
 
   // 2. AI Scheduling Preferences
   preferences: {

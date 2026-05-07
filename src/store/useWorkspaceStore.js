@@ -50,7 +50,10 @@ const useWorkspaceStore = create((set, get) => ({
       const response = await fetch("/api/workspaces");
       const result = await response.json();
       if (result.success) {
-        set({ workspaces: result.data });
+        const fetchedWorkspaces = result.data || [];
+        const currentActiveId = get().activeWorkspaceId;
+        const newActiveId = currentActiveId || fetchedWorkspaces[0]?.id || null;
+        set({ workspaces: fetchedWorkspaces, activeWorkspaceId: newActiveId });
       } else {
         set({ error: result.error });
       }
@@ -71,7 +74,7 @@ const useWorkspaceStore = create((set, get) => ({
    * @param {string} type - "Team Workspace" or "Personal".
    * @returns {Object|null} The created workspace object, or null on failure.
    */
-  createWorkspace: async (name, type = "Personal") => {
+  createWorkspace: async (name, type = "Personal", config = {}) => {
     set({ isCreating: true, error: null });
 
     // Color palette for new workspaces (cycles through options).
@@ -90,8 +93,8 @@ const useWorkspaceStore = create((set, get) => ({
       id: `ws_${Date.now()}`,
       name,
       type,
-      color: colorPalette[colorIndex],
-      iconName: type === "Team Workspace" ? "FolderKanban" : "CalendarDays",
+      color: config.color || colorPalette[colorIndex],
+      iconName: config.iconName || (type === "Team Workspace" ? "FolderKanban" : "CalendarDays"),
       createdAt: new Date().toISOString(),
     };
 
@@ -117,6 +120,7 @@ const useWorkspaceStore = create((set, get) => ({
         set({
           workspaces: [...workspaces, serverWorkspace],
           activeWorkspaceId: serverWorkspace.id,
+          isCreating: false,
         });
         return serverWorkspace;
       }
@@ -134,10 +138,10 @@ const useWorkspaceStore = create((set, get) => ({
   },
 
   /**
-   * Removes a workspace from the local store.
+   * Removes a workspace from the local store and backend database.
    * @param {string|number} workspaceId
    */
-  removeWorkspace: (workspaceId) => {
+  removeWorkspace: async (workspaceId) => {
     const { workspaces, activeWorkspaceId } = get();
     const filtered = workspaces.filter((ws) => ws.id !== workspaceId);
     set({
@@ -147,6 +151,38 @@ const useWorkspaceStore = create((set, get) => ({
           ? (filtered[0]?.id ?? null)
           : activeWorkspaceId,
     });
+
+    try {
+      await fetch(`/api/workspaces?id=${workspaceId}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // Best-effort
+    }
+  },
+
+  /**
+   * Renames a workspace in local store and backend database.
+   * @param {string} workspaceId
+   * @param {string} newName
+   */
+  renameWorkspace: async (workspaceId, newName) => {
+    const { workspaces } = get();
+    set({
+      workspaces: workspaces.map((w) =>
+        w.id === workspaceId ? { ...w, name: newName } : w
+      ),
+    });
+
+    try {
+      await fetch("/api/workspaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: workspaceId, name: newName }),
+      });
+    } catch {
+      // Best-effort
+    }
   },
 
   /**

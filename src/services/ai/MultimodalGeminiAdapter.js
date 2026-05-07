@@ -59,6 +59,15 @@ Examples of resolution (assuming today is Wednesday 2026-05-06):
   - "by Friday"       → deadline: "2026-05-08"
   - "2 days before X" → deadline must be 2 days before X's start_after date
 
+RECURRING & FREQUENCY RULES:
+If the user requests a recurring task (e.g. "every day", "daily", "every week", "every Tuesday"), you MUST expand this frequency and generate SEPARATE, INDEPENDENT task objects for EACH individual occurrence from today's date onwards up to the next 7 days (or up to the specified exam/event deadline). Do NOT output a single task representing the recurrence; output multiple task objects (e.g. one daily task object for each day).
+
+PLANNING TIME LIMITS & BUFFER SCOPE:
+Do NOT generate any tasks or recurrences that extend past a maximum 14-day look-ahead window starting from the current date. This provides a safety time buffer so that tasks do not get scheduled indefinitely or in an infinite time scope.
+
+MILESTONE & REFERENCE EVENT EXTRACTION:
+If the user mentions any reference events, exams, classes, meetings, or constraints (e.g. "because I have an exam next week at 7:30 am" or "due to a seminar at 3pm"), you MUST extract that event/milestone itself as a separate, distinct task object with 'fixed_time' set to true, so that it actually appears on the user's calendar.
+
 DEPENDENCY & PREREQUISITE RULES:
 When the user says "review at least N days prior to [event]", you MUST:
   1. Create the main event task with its resolved absolute dates.
@@ -77,7 +86,7 @@ For each task you extract, determine:
 - deadline:           ISO 8601 date string — latest date by which this task must be completed. null if unconstrained.
 - priority:           P1 (urgent/prerequisite) through P4 (low). Default P3.
 - depends_on:         task_name of a prerequisite task, or null.
-- fixed_time:         boolean. You MUST set this to true if the user mentions a specific time (e.g. "at 3pm", "10:00", "by noon"). If true, you MUST provide the exact time in 'start_after' using the provided timezone offset.
+- fixed_time:         boolean. You MUST set this to true if the user mentions a specific time (e.g. "at 3pm", "10:00", "by noon", "from 8am to 10am"). If true, you MUST provide the exact time in 'start_after' using the provided timezone offset.
 
 STRICT TEMPORAL REQUIREMENTS:
 1. If 'fixed_time' is true, 'start_after' MUST be a full ISO 8601 string including the TIME and OFFSET (e.g. "2026-05-11T15:00:00+08:00").
@@ -105,6 +114,16 @@ class MultimodalGeminiAdapter extends IAIService {
   async generateStandard(workspaceId, assignedTo, userPreferences, textPrompt, base64Images = []) {
     const contextPreamble = this._buildContextPreamble(workspaceId, assignedTo, userPreferences);
 
+    console.log(`\n==========================================`);
+    console.log(`[AI PROMPTING LOGS] - MultimodalGeminiAdapter`);
+    console.log(`==========================================`);
+    console.log(`- Workspace ID: ${workspaceId}`);
+    console.log(`- Assigned To: ${assignedTo}`);
+    console.log(`- User Prompt:\n"${textPrompt}"`);
+    console.log(`- Context Preamble:\n${contextPreamble}`);
+    console.log(`- System Instruction:\n${SYSTEM_INSTRUCTION}`);
+    console.log(`==========================================\n`);
+
     // Build the contents array: context preamble, then user prompt, then any images.
     const textParts = [
       { text: contextPreamble },
@@ -127,7 +146,15 @@ class MultimodalGeminiAdapter extends IAIService {
       },
     });
 
-    return JSON.parse(response.text);
+    console.log(`\n==========================================`);
+    console.log(`[GEMINI RAW RESPONSE CONTENT]`);
+    console.log(`==========================================`);
+    console.log(response.text);
+    console.log(`==========================================\n`);
+
+    const parsedTasks = JSON.parse(response.text);
+    console.log(`[AI PROMPTING LOGS] Parsed ${parsedTasks.length} tasks successfully.`);
+    return parsedTasks;
   }
 
   // ---------------------------------------------------------------------------
@@ -239,7 +266,13 @@ class MultimodalGeminiAdapter extends IAIService {
     const now = new Date();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = dayNames[now.getDay()];
-    const isoDate = now.toISOString().slice(0, 10);
+    
+    // Calculate local date elements correctly (independent of UTC)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const date = String(now.getDate()).padStart(2, '0');
+    const isoDate = `${year}-${month}-${date}`;
+    
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
     // Calculate timezone offset in format ±HH:MM

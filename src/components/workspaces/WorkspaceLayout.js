@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import WorkspaceHeader from "./WorkspaceHeader";
+import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 export default function WorkspaceLayout({ 
   children,
@@ -11,6 +12,16 @@ export default function WorkspaceLayout({
   sidebarProps = {}
 }) {
   const [isExpanded, setIsExpanded] = useState(true);
+
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  const mergedHeaderProps = {
+    title: activeWorkspace ? activeWorkspace.name : "Workspace",
+    subtitle: activeWorkspace ? activeWorkspace.type : "Loading workspace...",
+    ...headerProps
+  };
 
   return (
     <div className="flex h-screen w-full bg-slate-50 overflow-hidden font-sans">
@@ -26,7 +37,7 @@ export default function WorkspaceLayout({
       <main className="flex-1 overflow-hidden flex flex-col relative z-0">
         
         {/* Extensible Header Component */}
-        <WorkspaceHeader {...headerProps} />
+        <WorkspaceHeader {...mergedHeaderProps} />
         
         {/* App Content Body */}
         <div className="flex-1 overflow-hidden p-4 md:p-6 h-full w-full bg-slate-50">

@@ -22,7 +22,7 @@ import pipeline from '@/orchestrator/PipelineFacade';
 const RecalculateRequestSchema = z.object({
   workspace_id: z.string().min(1),
   interrupted_task_id: z.string().min(1),
-  action: z.enum(['snooze', 'missed']),
+  action: z.enum(['snooze', 'missed', 'complete']),
   delay_minutes: z.number().min(0).optional(),
   busy_blocks: z.array(z.object({
     busy: z.array(z.object({

@@ -24,10 +24,13 @@ export default function WorkspaceSidebar({
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
   const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
+  const renameWorkspace = useWorkspaceStore((state) => state.renameWorkspace);
+  const removeWorkspace = useWorkspaceStore((state) => state.removeWorkspace);
   const isCreating = useWorkspaceStore((state) => state.isCreating);
 
   const [activeHoverEnv, setActiveHoverEnv] = useState(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
 
   const handleAddEnvironment = async () => {
     const name = prompt("Enter workspace name:");
@@ -120,11 +123,49 @@ export default function WorkspaceSidebar({
                 {isExpanded && <span className="ml-3 truncate flex-1">{env.name}</span>}
                 {isExpanded && env.type && <span className="bg-emerald-100/50 text-emerald-700 py-0.5 px-2 rounded font-semibold text-[9px] uppercase tracking-wider ml-2 shrink-0">{env.type}</span>}
               </button>
-              {isExpanded && activeHoverEnv === env.id && (
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center">
-                  <button className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white rounded shadow-sm border border-slate-200/50 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isExpanded && (activeHoverEnv === env.id || openMenuId === env.id) && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center z-30">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuId(openMenuId === env.id ? null : env.id);
+                    }}
+                    className="p-1 text-slate-400 hover:text-slate-700 hover:bg-white rounded shadow-sm border border-slate-200/50 opacity-100 group-hover:opacity-100 transition-opacity"
+                  >
                     <MoreVertical size={14} />
                   </button>
+                  {openMenuId === env.id && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setOpenMenuId(null); }}></div>
+                      <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 w-28 z-50 animate-in fade-in duration-100">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newName = prompt("Rename workspace:", env.name);
+                            if (newName && newName.trim()) {
+                              renameWorkspace(env.id, newName.trim());
+                            }
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-emerald-600 transition-colors font-semibold"
+                        >
+                          Rename
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Are you sure you want to delete "${env.name}"? This will permanently delete all its schedules.`)) {
+                              removeWorkspace(env.id);
+                            }
+                            setOpenMenuId(null);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors font-semibold"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -137,7 +178,7 @@ export default function WorkspaceSidebar({
             isExpanded ? (
               <>
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <h2 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Team Analytics</h2>
+                  <h2 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Analytics</h2>
                 </div>
                 <div className="px-3 py-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3 shadow-sm">
                   <div className="flex items-center gap-3">
@@ -153,7 +194,7 @@ export default function WorkspaceSidebar({
               </>
             ) : (
               <div className="flex flex-col items-center gap-4 mt-6">
-                <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" title="Team Analytics">
+                <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" title="Analytics">
                   <BarChart2 size={18} />
                 </button>
               </div>

@@ -3,6 +3,7 @@
 import React from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import useScheduleStore from "../../store/useScheduleStore";
+import useWorkspaceStore from "../../store/useWorkspaceStore";
 
 /**
  * TaskBreakdown
@@ -26,6 +27,7 @@ export default function TaskBreakdown({ isExpanded = true, onToggle }) {
   const aiParsedTasks = useScheduleStore((state) => state.aiParsedTasks);
   const generateSchedule = useScheduleStore((state) => state.generateSchedule);
   const isLoading = useScheduleStore((state) => state.isLoading);
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
 
   const tasks = aiParsedTasks.length > 0
     ? aiParsedTasks
@@ -101,7 +103,7 @@ export default function TaskBreakdown({ isExpanded = true, onToggle }) {
 
       <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
         <button
-          onClick={() => generateSchedule("ws_8f92a")}
+          onClick={() => generateSchedule(activeWorkspaceId)}
           disabled={isLoading}
           className={`px-5 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm ${
             isLoading

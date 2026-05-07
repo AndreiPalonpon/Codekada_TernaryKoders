@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import useWorkspaceStore from "./useWorkspaceStore";
 
 /**
  * useScheduleStore
@@ -90,13 +91,14 @@ const useScheduleStore = create((set, get) => ({
    * @param {string} workspaceId - Workspace identifier (default "ws_8f92a").
    * @param {boolean} overwrite - If true, clears the calendar before appending.
    */
-  generateSchedule: async (workspaceId = "ws_8f92a", overwrite = false) => {
+  generateSchedule: async (workspaceId = null, overwrite = false) => {
     const { textInput, attachments, events, userPreferences } = get();
 
     set({ isLoading: true, error: null });
 
     // If overwriting, clear the events first so they aren't passed to the backend as busy blocks.
     const existingEvents = overwrite ? [] : events;
+    const targetWorkspaceId = workspaceId || useWorkspaceStore.getState().activeWorkspaceId || "ws_8f92a";
 
     try {
       const payloadInputs = [];
@@ -109,7 +111,7 @@ const useScheduleStore = create((set, get) => ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspace_id: workspaceId,
+          workspace_id: targetWorkspaceId,
           inputs: payloadInputs,
           existing_events: existingEvents,
           user_preferences: userPreferences,
@@ -138,6 +140,62 @@ const useScheduleStore = create((set, get) => ({
           message: networkError.message || "Failed to reach the server.",
         },
       });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  /**
+   * Directly posts manual (hardcoded) tasks to the schedule generate endpoint,
+   * bypassing the AI prompt.
+   *
+   * @param {string} workspaceId
+   * @param {Object} manualTask - The task schema to add.
+   * @param {boolean} overwrite - If true, clears the calendar before scheduling.
+   */
+  generateManualTask: async (workspaceId, manualTask, overwrite = false) => {
+    const { events, userPreferences } = get();
+    set({ isLoading: true, error: null });
+
+    const existingEvents = overwrite ? [] : events;
+    const targetWorkspaceId = workspaceId || useWorkspaceStore.getState().activeWorkspaceId || "ws_8f92a";
+
+    try {
+      const response = await fetch("/api/schedule/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspace_id: targetWorkspaceId,
+          manual_tasks: [manualTask],
+          existing_events: existingEvents,
+          user_preferences: userPreferences,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        set((state) => ({
+          events: overwrite ? result.data : [
+            ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+            ...result.data,
+          ],
+          aiParsedTasks: overwrite
+            ? (result.meta?.ai_tasks || [])
+            : [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
+        }));
+        return { success: true };
+      } else {
+        set({ error: result.error });
+        return { success: false, error: result.error };
+      }
+    } catch (networkError) {
+      const err = {
+        code: "NETWORK_ERROR",
+        message: networkError.message || "Failed to reach the server.",
+      };
+      set({ error: err });
+      return { success: false, error: err };
     } finally {
       set({ isLoading: false });
     }
@@ -278,7 +336,7 @@ const useScheduleStore = create((set, get) => ({
    * @param {string} taskId       - The event ID to snooze.
    * @param {number} delayMinutes - Minutes to delay (default 30).
    */
-  snoozeTask: async (taskId, delayMinutes = 30) => {
+  snoozeTask: async (taskId, delayMinutes = 30, reason = "") => {
     set({ isRecalculating: true, error: null });
 
     try {
@@ -286,29 +344,80 @@ const useScheduleStore = create((set, get) => ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspace_id: "ws_8f92a",
+          workspace_id: useWorkspaceStore.getState().activeWorkspaceId || "ws_8f92a",
           interrupted_task_id: taskId,
           action: "snooze",
           delay_minutes: delayMinutes,
           busy_blocks: [{ busy: [] }],
           triggered_by: "user_mvp",
+          snooze_reason: reason,
         }),
       });
 
       const result = await response.json();
 
       if (result.success && result.data?.scheduled) {
-        // Backend returned a fresh schedule — replace events.
-        set({ events: result.data.scheduled });
+        // Enrich returned events with local snooze audit log
+        const enrichedEvents = result.data.scheduled.map((e) => {
+          if (e.id !== taskId) return e;
+          let desc = e.description || e.extendedProps?.description || "";
+          if (reason.trim()) {
+            desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
+          }
+          return {
+            ...e,
+            extendedProps: {
+              ...(e.extendedProps || {}),
+              description: desc
+            }
+          };
+        });
+        set({ events: enrichedEvents });
       } else {
-        // Optimistic local fallback: remove the snoozed event from the UI.
+        // Optimistic local fallback: Shift the event forward instead of deleting it!
         const { events } = get();
-        set({ events: events.filter((e) => e.id !== taskId) });
+        const shiftedEvents = events.map((e) => {
+          if (e.id !== taskId) return e;
+          const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
+          const newEnd = e.end ? new Date(new Date(e.end).getTime() + delayMinutes * 60000) : null;
+          let desc = e.extendedProps?.description || "";
+          if (reason.trim()) {
+            desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
+          }
+          return {
+            ...e,
+            start: newStart,
+            end: newEnd,
+            extendedProps: {
+              ...(e.extendedProps || {}),
+              description: desc
+            }
+          };
+        });
+        set({ events: shiftedEvents });
       }
     } catch {
-      // Offline / no DB — optimistic local removal.
+      // Offline / no DB — optimistic local shifting fallback
       const { events } = get();
-      set({ events: events.filter((e) => e.id !== taskId) });
+      const shiftedEvents = events.map((e) => {
+        if (e.id !== taskId) return e;
+        const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
+        const newEnd = e.end ? new Date(new Date(e.end).getTime() + delayMinutes * 60000) : null;
+        let desc = e.extendedProps?.description || "";
+        if (reason.trim()) {
+          desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
+        }
+        return {
+          ...e,
+          start: newStart,
+          end: newEnd,
+          extendedProps: {
+            ...(e.extendedProps || {}),
+            description: desc
+          }
+        };
+      });
+      set({ events: shiftedEvents });
     } finally {
       set({ isRecalculating: false });
     }
@@ -326,9 +435,9 @@ const useScheduleStore = create((set, get) => ({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspace_id: "ws_8f92a",
+          workspace_id: useWorkspaceStore.getState().activeWorkspaceId || "ws_8f92a",
           interrupted_task_id: taskId,
-          action: "missed",          // Reuses "missed" to clear blocks; status updated locally.
+          action: "complete",          // Marks the task as Completed in MongoDB.
           delay_minutes: 0,
           busy_blocks: [{ busy: [] }],
           triggered_by: "user_mvp",
@@ -347,12 +456,20 @@ const useScheduleStore = create((set, get) => ({
   },
 
   /**
-   * Deletes a task entirely from the calendar.
+   * Deletes a task entirely from the calendar and the database.
    * @param {string} taskId - The event ID to delete.
    */
-  deleteTask: (taskId) => {
+  deleteTask: async (taskId) => {
     const { events } = get();
     set({ events: events.filter((e) => e.id !== taskId) });
+
+    try {
+      await fetch(`/api/schedule/generate?id=${taskId}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // Best-effort
+    }
   },
 
   /**
@@ -361,6 +478,34 @@ const useScheduleStore = create((set, get) => ({
    */
   clearSchedule: () => {
     set({ events: [], aiParsedTasks: [], error: null });
+  },
+
+  /**
+   * Loads the existing schedule tasks for a workspace from the database.
+   */
+  loadSchedule: async (workspaceId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch(`/api/schedule/generate?workspace_id=${workspaceId}`);
+      const result = await response.json();
+      if (result.success) {
+        set({
+          events: result.data || [],
+          aiParsedTasks: result.meta?.ai_tasks || [],
+        });
+      } else {
+        set({ error: result.error });
+      }
+    } catch (networkError) {
+      set({
+        error: {
+          code: "NETWORK_ERROR",
+          message: networkError.message || "Failed to load schedule from database.",
+        },
+      });
+    } finally {
+      set({ isLoading: false });
+    }
   },
 
   // ---------------------------------------------------------------------------

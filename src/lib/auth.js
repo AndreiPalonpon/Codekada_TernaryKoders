@@ -1,4 +1,6 @@
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
+import crypto from "crypto";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
@@ -18,6 +20,41 @@ export const authOptions = {
           access_type: "offline",
           prompt: "consent",
         },
+      },
+    }),
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Missing email or password");
+        }
+
+        await dbConnect();
+        const user = await User.findOne({ email: credentials.email.toLowerCase() });
+
+        if (!user) {
+          throw new Error("No user found with this email");
+        }
+
+        if (!user.password) {
+          throw new Error("This email is registered with Google. Please sign in with Google.");
+        }
+
+        // Verify password using safe PBKDF2 hash
+        const hash = crypto.pbkdf2Sync(credentials.password, "syncforge-salt", 1000, 64, "sha512").toString("hex");
+        if (user.password !== hash) {
+          throw new Error("Incorrect password");
+        }
+
+        return {
+          id: user._id.toString(),
+          name: user.name,
+          email: user.email,
+        };
       },
     }),
   ],

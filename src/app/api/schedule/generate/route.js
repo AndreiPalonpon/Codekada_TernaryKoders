@@ -4,6 +4,24 @@ import { z } from 'zod';
 import serviceManager from '@/orchestrator/ServiceManager';
 import { authOptions } from '@/lib/auth';
 import { getGoogleCalendarEvents } from '@/lib/google/calendar';
+import dbConnect from '@/lib/mongodb';
+import Task from '@/models/Task';
+import mongoose from 'mongoose';
+
+/**
+ * Resilient helper to convert placeholder IDs to valid 24-char hex ObjectIds.
+ */
+function toValidObjectId(id) {
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    return id;
+  }
+  const clean = String(id || '').replace(/[^0-9a-fA-F]/g, '');
+  const padded = clean.padEnd(24, '0').slice(0, 24);
+  if (mongoose.Types.ObjectId.isValid(padded)) {
+    return padded;
+  }
+  return new mongoose.Types.ObjectId().toString();
+}
 
 /**
  * POST /api/schedule/generate
@@ -33,7 +51,20 @@ const GenerateRequestSchema = z.object({
       type: z.enum(['text', 'image_base64']),
       content: z.string(),
     })
-  ).min(1, 'At least one input is required.'),
+  ).optional(),
+  manual_tasks: z.array(
+    z.object({
+      task_name: z.string().min(1),
+      estimated_minutes: z.number().or(z.string()),
+      cognitive_load: z.enum(['Low', 'Medium', 'High']).optional(),
+      preferred_window: z.enum(['Morning', 'Afternoon', 'Night']).optional(),
+      splittable: z.boolean().optional(),
+      start_after: z.string().nullable().optional(),
+      deadline: z.string().nullable().optional(),
+      fixed_time: z.boolean().optional(),
+      priority: z.enum(['P1', 'P2', 'P3', 'P4']).optional()
+    })
+  ).optional(),
   existing_events: z.array(
     z.object({
       start: z.string(),
@@ -47,6 +78,11 @@ const GenerateRequestSchema = z.object({
     exclude_days: z.array(z.string()).optional().default([]),
     force_split_tasks: z.boolean().optional().default(false),
   }).optional().default({}),
+}).refine(data => {
+  return (data.inputs && data.inputs.length > 0) || (data.manual_tasks && data.manual_tasks.length > 0);
+}, {
+  message: 'Either inputs or manual_tasks must be provided.',
+  path: ['inputs']
 });
 
 // ── Color palette keyed by cognitive load ────────────────────────────────────
@@ -89,10 +125,11 @@ function mapScheduledToCalendarEvents(scheduledTasks) {
 
   for (const task of scheduledTasks) {
     const color = colorForLoad(task.metadata.cognitive_load);
+    const taskId = task._id ? task._id.toString() : `gen_${Date.now()}_${events.length}`;
 
     for (const block of task.schedule_blocks) {
       events.push({
-        id: `gen_${Date.now()}_${events.length}`,
+        id: taskId,
         title: task.metadata.task_name,
         start: block.start_time,
         end: block.end_time,
@@ -166,37 +203,55 @@ export async function POST(request) {
   }
 
   try {
-    const { workspace_id, inputs, existing_events, user_preferences } = parseResult.data;
+    const { workspace_id, inputs, manual_tasks, existing_events, user_preferences } = parseResult.data;
     const session = await getServerSession(authOptions);
 
-    // ── Parse multimodal inputs into the shapes the AI adapter expects ──
+    let aiTasks = [];
 
-    const textPrompt = inputs
-      .filter((i) => i.type === 'text')
-      .map((i) => i.content)
-      .join('\n');
-
-    const base64Images = inputs
-      .filter((i) => i.type === 'image_base64')
-      .map((i) => ({
-        inlineData: {
-          mimeType: i.content.split(';')[0].replace('data:', '') || 'image/png',
-          data: i.content.split(',')[1],
-        },
+    if (manual_tasks && manual_tasks.length > 0) {
+      aiTasks = manual_tasks.map(t => ({
+        workspace_id: workspace_id,
+        assigned_to: 'user_mvp',
+        metadata: {
+          task_name: t.task_name,
+          estimated_minutes: typeof t.estimated_minutes === 'string' ? parseInt(t.estimated_minutes) || 60 : t.estimated_minutes,
+          cognitive_load: t.cognitive_load || 'Medium',
+          preferred_window: t.preferred_window || 'Morning',
+          splittable: t.splittable !== undefined ? t.splittable : true,
+          start_after: t.start_after || null,
+          deadline: t.deadline || null,
+          fixed_time: t.fixed_time || false,
+          priority: t.priority || 'P3'
+        }
       }));
+    } else {
+      // ── Parse multimodal inputs into the shapes the AI adapter expects ──
+      const textPrompt = (inputs || [])
+        .filter((i) => i.type === 'text')
+        .map((i) => i.content)
+        .join('\n');
 
-    // ── Phase 1: The Brain (Gemini AI) ──────────────────────────────────
-    // ServiceManager provides FallbackAIDecorator(geminiAdapter).
-    // If the Gemini API is unavailable, the decorator catches and returns [].
+      const base64Images = (inputs || [])
+        .filter((i) => i.type === 'image_base64')
+        .map((i) => ({
+          inlineData: {
+            mimeType: i.content.split(';')[0].replace('data:', '') || 'image/png',
+            data: i.content.split(',')[1],
+          },
+        }));
 
-    const aiService = await serviceManager.getAIService();
-    const aiTasks = await aiService.generateStandard(
-      workspace_id,
-      'user_mvp',        // MVP: hardcoded user ID until auth is wired
-      user_preferences,
-      textPrompt,
-      base64Images
-    );
+      // ── Phase 1: The Brain (Gemini AI) ──────────────────────────────────
+      // ServiceManager provides FallbackAIDecorator(geminiAdapter).
+      // If the Gemini API is unavailable, the decorator catches and returns [].
+      const aiService = await serviceManager.getAIService();
+      aiTasks = await aiService.generateStandard(
+        workspace_id,
+        'user_mvp',        // MVP: hardcoded user ID until auth is wired
+        user_preferences,
+        textPrompt,
+        base64Images
+      );
+    }
 
     // If the AI returned no tasks (empty input or fallback), return early.
     if (!aiTasks || aiTasks.length === 0) {
@@ -262,11 +317,38 @@ export async function POST(request) {
       }
     );
 
+    // ── Persist generated tasks to MongoDB ──────────────────────────────
+    await dbConnect();
+    const validWorkspaceId = toValidObjectId(workspace_id);
+    const userId = session?.user?.id || toValidObjectId('user_mvp');
+
+    const savedTasks = [];
+    for (const t of scheduled) {
+      const dbTask = await Task.create({
+        workspace_id: validWorkspaceId,
+        assigned_to: userId,
+        metadata: {
+          task_name: t.metadata.task_name,
+          estimated_minutes: t.metadata.estimated_minutes,
+          cognitive_load: t.metadata.cognitive_load,
+          preferred_window: t.metadata.preferred_window,
+          splittable: t.metadata.splittable,
+        },
+        status: 'Scheduled',
+        schedule_blocks: t.schedule_blocks.map(b => ({
+          start_time: new Date(b.start_time),
+          end_time: new Date(b.end_time),
+          calendar_event_id: b.calendar_event_id,
+        })),
+      });
+      savedTasks.push(dbTask);
+    }
+
     // ── Map to FullCalendar events ──────────────────────────────────────
 
     const calendarEvents = [
       ...mapGoogleEventsToCalendarEvents(googleCalendarEvents),
-      ...mapScheduledToCalendarEvents(scheduled),
+      ...mapScheduledToCalendarEvents(savedTasks),
     ];
 
     const processingMs = Date.now() - startTime;
@@ -299,3 +381,159 @@ export async function POST(request) {
     );
   }
 }
+
+/**
+ * GET /api/schedule/generate
+ *
+ * Retrieves all stored tasks for a workspace and maps them to calendar events.
+ */
+export async function GET(request) {
+  const startTime = Date.now();
+  try {
+    const { searchParams } = new URL(request.url);
+    const workspaceIdInput = searchParams.get('workspace_id');
+
+    if (!workspaceIdInput) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'BAD_REQUEST', message: 'workspace_id is required.' } },
+        { status: 400 }
+      );
+    }
+
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in.' } },
+        { status: 401 }
+      );
+    }
+
+    await dbConnect();
+    const validWorkspaceId = toValidObjectId(workspaceIdInput);
+
+    // Find all scheduled or snoozed tasks for this workspace
+    const dbTasks = await Task.find({
+      workspace_id: validWorkspaceId,
+      status: { $in: ['Scheduled', 'Snoozed', 'Pending'] },
+    });
+
+    const aiTasks = [];
+    const calendarEvents = [];
+
+    for (const task of dbTasks) {
+      // Build Phase 1 metadata lists
+      aiTasks.push({
+        _id: task._id.toString(),
+        metadata: {
+          task_name: task.metadata.task_name,
+          estimated_minutes: task.metadata.estimated_minutes,
+          cognitive_load: task.metadata.cognitive_load,
+          preferred_window: task.metadata.preferred_window,
+          splittable: task.metadata.splittable,
+        },
+      });
+
+      const color = colorForLoad(task.metadata.cognitive_load);
+      for (const block of task.schedule_blocks) {
+        calendarEvents.push({
+          id: task._id.toString(),
+          title: task.metadata.task_name,
+          start: block.start_time,
+          end: block.end_time,
+          backgroundColor: color.bg,
+          borderColor: color.border,
+          extendedProps: {
+            description: `<p>Loaded from SyncForge Database.</p>`,
+            cognitive_load: task.metadata.cognitive_load,
+            estimated_minutes: task.metadata.estimated_minutes,
+            preferred_window: task.metadata.preferred_window,
+            splittable: task.metadata.splittable,
+            assigned_to: 'Current User',
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: calendarEvents,
+      error: null,
+      meta: {
+        timestamp: new Date().toISOString(),
+        processing_ms: Date.now() - startTime,
+        ai_tasks: aiTasks,
+      },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'FETCH_TASKS_FAILED', message: err.message } },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/schedule/generate
+ *
+ * Deletes a task by its ID in MongoDB.
+ */
+export async function DELETE(request) {
+  const startTime = Date.now();
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in.' } },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'BAD_REQUEST', message: 'Task ID is required.' } },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+    const validTaskId = toValidObjectId(id);
+
+    // Only allow deletion of tasks belonging to workspaces where user is present
+    const taskToDelete = await Task.findById(validTaskId);
+    if (!taskToDelete) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'NOT_FOUND', message: 'Task not found.' } },
+        { status: 404 }
+      );
+    }
+
+    const parentWorkspace = await Workspace.findOne({
+      _id: taskToDelete.workspace_id,
+      'members.user_id': session.user.id,
+    });
+
+    if (!parentWorkspace) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'FORBIDDEN', message: 'You do not have access to this task.' } },
+        { status: 403 }
+      );
+    }
+
+    await Task.deleteOne({ _id: validTaskId });
+
+    return NextResponse.json({
+      success: true,
+      data: { id },
+      error: null,
+      meta: { timestamp: new Date().toISOString(), processing_ms: Date.now() - startTime },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'DELETE_TASK_FAILED', message: err.message } },
+      { status: 500 }
+    );
+  }
+}
+

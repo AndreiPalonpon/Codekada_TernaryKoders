@@ -33,7 +33,7 @@ export async function GET() {
     const formatted = workspaces.map(ws => ({
       id: ws._id.toString(),
       name: ws.workspace_name,
-      type: ws.members.find(m => m.user_id === session.user.id)?.role === 'Owner' ? 'Personal' : 'Team Workspace',
+      type: ws.members.find(m => m.user_id.toString() === session.user.id)?.role === 'Owner' ? 'Personal' : 'Team Workspace',
       color: "bg-emerald-500", // Cycle colors in the UI if needed
       iconName: "FolderKanban",
       createdAt: ws.createdAt,
@@ -108,38 +108,36 @@ export async function POST(request) {
   const { workspace_name, invited_user_emails } = parseResult.data;
 
   try {
-    // MVP: Generate an in-memory workspace object.
-    // When MongoDB is wired, replace this with:
-    //   await dbConnect();
-    //   const workspace = await Workspace.create({ ... });
-    const workspace = {
-      _id: `ws_${Date.now()}`,
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in to create workspaces.' } },
+        { status: 401 }
+      );
+    }
+
+    await dbConnect();
+
+    const dbWorkspace = await Workspace.create({
       workspace_name,
       members: [
         {
-          user_id: 'user_mvp',
+          user_id: session.user.id,
           role: 'Owner',
-          joined_at: new Date().toISOString(),
-        },
-        ...invited_user_emails.map((email) => ({
-          user_id: email,
-          role: 'Editor',
-          joined_at: new Date().toISOString(),
-        })),
+          joined_at: new Date(),
+        }
       ],
       analytics: {
         total_tasks_created: 0,
         total_deep_work_hours: 0,
-      },
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      }
+    });
 
     const processingMs = Date.now() - startTime;
     return NextResponse.json(
       {
         success: true,
-        data: workspace,
+        data: dbWorkspace,
         error: null,
         meta: { timestamp: new Date().toISOString(), processing_ms: processingMs },
       },
@@ -157,3 +155,113 @@ export async function POST(request) {
     );
   }
 }
+
+/**
+ * PATCH /api/workspaces
+ *
+ * Renames a workspace in MongoDB.
+ */
+export async function PATCH(request) {
+  const startTime = Date.now();
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in.' } },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { id, name } = body;
+    if (!id || !name) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'BAD_REQUEST', message: 'ID and name are required.' } },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+
+    const ws = await Workspace.findOneAndUpdate(
+      { _id: id, 'members.user_id': session.user.id },
+      { workspace_name: name },
+      { new: true }
+    );
+
+    if (!ws) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'NOT_FOUND_OR_FORBIDDEN', message: 'Workspace not found or unauthorized.' } },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: ws,
+      error: null,
+      meta: { timestamp: new Date().toISOString(), processing_ms: Date.now() - startTime },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'PATCH_FAILED', message: err.message } },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * DELETE /api/workspaces
+ *
+ * Deletes a workspace and its associated records in MongoDB.
+ */
+export async function DELETE(request) {
+  const startTime = Date.now();
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user?.id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'UNAUTHORIZED', message: 'You must be signed in.' } },
+        { status: 401 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'BAD_REQUEST', message: 'Workspace ID is required.' } },
+        { status: 400 }
+      );
+    }
+
+    await dbConnect();
+    
+    // Only owner can delete
+    const result = await Workspace.deleteOne({
+      _id: id,
+      'members.user_id': session.user.id,
+      'members.role': 'Owner'
+    });
+
+    if (result.deletedCount === 0) {
+      return NextResponse.json(
+        { success: false, data: null, error: { code: 'NOT_FOUND_OR_FORBIDDEN', message: 'Workspace not found or unauthorized.' } },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { id },
+      error: null,
+      meta: { timestamp: new Date().toISOString(), processing_ms: Date.now() - startTime },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { success: false, data: null, error: { code: 'DELETE_FAILED', message: err.message } },
+      { status: 500 }
+    );
+  }
+}
+

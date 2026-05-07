@@ -19,11 +19,26 @@ export default function EventDetailsModal({ event, onClose }) {
   const isRecalculating = useScheduleStore((state) => state.isRecalculating);
   const isWritingGoogleCalendar = useScheduleStore((state) => state.isWritingGoogleCalendar);
 
-  const [snoozeMinutes, setSnoozeMinutes] = useState(30);
+  const [snoozeOption, setSnoozeOption] = useState("30"); // "15", "30", "45", "60", "120", "240", "custom"
+  const [customSnoozeValue, setCustomSnoozeValue] = useState(15);
+  const [customSnoozeUnit, setCustomSnoozeUnit] = useState("minutes"); // "minutes" | "hours"
+  const [snoozeReason, setSnoozeReason] = useState("");
   const [createdGoogleEvent, setCreatedGoogleEvent] = useState(null);
+
+  const effectiveSnoozeMinutes = React.useMemo(() => {
+    if (snoozeOption === "custom") {
+      const val = Number(customSnoozeValue) || 0;
+      return customSnoozeUnit === "hours" ? val * 60 : val;
+    }
+    return Number(snoozeOption) || 30;
+  }, [snoozeOption, customSnoozeValue, customSnoozeUnit]);
 
   useEffect(() => {
     setCreatedGoogleEvent(null);
+    setSnoozeOption("30");
+    setCustomSnoozeValue(15);
+    setCustomSnoozeUnit("minutes");
+    setSnoozeReason("");
   }, [event?.id]);
 
   if (!event) return null;
@@ -47,7 +62,7 @@ export default function EventDetailsModal({ event, onClose }) {
 
   const handleSnooze = () => {
     if (isReadOnly) return;
-    snoozeTask(event.id, snoozeMinutes);
+    snoozeTask(event.id, effectiveSnoozeMinutes, snoozeReason);
     onClose();
   };
 
@@ -130,27 +145,77 @@ export default function EventDetailsModal({ event, onClose }) {
           </div>
 
           {!isReadOnly && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-xs text-amber-700 uppercase font-bold tracking-wider mb-2 flex items-center gap-1.5">
-                <AlarmClock size={14} /> Snooze Task
-              </p>
-              <div className="flex items-center gap-3">
-                <select
-                  value={snoozeMinutes}
-                  onChange={(e) => setSnoozeMinutes(Number(e.target.value))}
-                  className="text-sm px-3 py-2 border border-amber-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
-                >
-                  <option value={15}>15 minutes</option>
-                  <option value={30}>30 minutes</option>
-                  <option value={60}>1 hour</option>
-                  <option value={120}>2 hours</option>
-                </select>
+            <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-amber-800 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                  <AlarmClock size={15} className="text-amber-600" /> Advanced Snooze Postponement
+                </p>
+                {event.start && (
+                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-100/60 px-2 py-0.5 rounded-full">
+                    Est. New Time: {new Date(new Date(event.start).getTime() + effectiveSnoozeMinutes * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-amber-900/60 uppercase">Delay Duration</label>
+                  <select
+                    value={snoozeOption}
+                    onChange={(e) => setSnoozeOption(e.target.value)}
+                    className="w-full text-sm px-3 py-2 border border-amber-200 rounded-lg bg-white font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all shadow-sm"
+                  >
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="120">2 hours</option>
+                    <option value="240">4 hours</option>
+                    <option value="custom">Custom Duration...</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-amber-900/60 uppercase">Postponement Reason</label>
+                  <input
+                    type="text"
+                    value={snoozeReason}
+                    onChange={(e) => setSnoozeReason(e.target.value)}
+                    placeholder="e.g. coffee break, waiting on code review"
+                    className="w-full text-sm px-3 py-2 border border-amber-200 rounded-lg bg-white placeholder-amber-900/40 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all shadow-sm"
+                  />
+                </div>
+              </div>
+
+              {snoozeOption === "custom" && (
+                <div className="p-3 bg-amber-100/40 border border-amber-200/50 rounded-lg flex items-center gap-3 animate-in slide-in-from-top-1 fade-in duration-150">
+                  <span className="text-xs font-bold text-amber-800">Snooze for:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={customSnoozeValue}
+                    onChange={(e) => setCustomSnoozeValue(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-20 text-sm px-2 py-1 border border-amber-200 rounded-md bg-white text-center focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  />
+                  <select
+                    value={customSnoozeUnit}
+                    onChange={(e) => setCustomSnoozeUnit(e.target.value)}
+                    className="text-xs px-2 py-1 border border-amber-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                  >
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
                 <button
                   onClick={handleSnooze}
                   disabled={isRecalculating}
-                  className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-5 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 rounded-lg shadow-sm shadow-amber-600/10 transition-all disabled:opacity-50 flex items-center gap-2"
                 >
-                  {isRecalculating ? "Snoozing..." : "Snooze"}
+                  <AlarmClock size={16} />
+                  {isRecalculating ? "Snoozing Task..." : "Delay & Reschedule"}
                 </button>
               </div>
             </div>

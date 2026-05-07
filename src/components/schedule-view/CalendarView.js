@@ -26,6 +26,7 @@ export default function CalendarView() {
 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const calendarRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -64,7 +65,7 @@ export default function CalendarView() {
   /**
    * Exports the current calendar events as a downloadable JSON file.
    */
-  const handleExport = () => {
+  const handleExportJSON = () => {
     const exportData = events.map((e) => ({
       title: e.title,
       start: e.start,
@@ -80,6 +81,88 @@ export default function CalendarView() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `syncforge_schedule_${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Exports the current calendar events as a downloadable CSV file.
+   */
+  const handleExportCSV = () => {
+    const headers = ["Title", "Start Time", "End Time", "Cognitive Load", "Assignee"];
+    const rows = events.map((e) => [
+      `"${(e.title || "").replace(/"/g, '""')}"`,
+      `"${e.start ? new Date(e.start).toLocaleString() : ""}"`,
+      `"${e.end ? new Date(e.end).toLocaleString() : ""}"`,
+      `"${(e.extendedProps?.cognitive_load || "").replace(/"/g, '""')}"`,
+      `"${(e.extendedProps?.assigned_to || "").replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `syncforge_schedule_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Exports the current calendar events as a downloadable RFC 5545 iCalendar (.ics) file.
+   */
+  const handleExportICS = () => {
+    const formatICSDate = (date) => {
+      const pad = (num) => String(num).padStart(2, "0");
+      return [
+        date.getUTCFullYear(),
+        pad(date.getUTCMonth() + 1),
+        pad(date.getUTCDate()),
+        "T",
+        pad(date.getUTCHours()),
+        pad(date.getUTCMinutes()),
+        pad(date.getUTCSeconds()),
+        "Z"
+      ].join("");
+    };
+
+    let icsLines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//SyncForge//Calendar Exporter//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH"
+    ];
+
+    events.forEach((e) => {
+      if (!e.start || !e.end) return;
+      const startStr = formatICSDate(new Date(e.start));
+      const endStr = formatICSDate(new Date(e.end));
+      const cleanTitle = (e.title || "").replace(/[,;]/g, "\\$&");
+      const desc = e.extendedProps?.description 
+        ? e.extendedProps.description.replace(/<[^>]*>/g, "").replace(/[,;]/g, "\\$&")
+        : "Scheduled with SyncForge AI";
+
+      icsLines.push(
+        "BEGIN:VEVENT",
+        `UID:${e.id || Math.random().toString(36).substr(2, 9)}@syncforge.com`,
+        `DTSTAMP:${formatICSDate(new Date())}`,
+        `DTSTART:${startStr}`,
+        `DTEND:${endStr}`,
+        `SUMMARY:${cleanTitle}`,
+        `DESCRIPTION:${desc}`,
+        "END:VEVENT"
+      );
+    });
+
+    icsLines.push("END:VCALENDAR");
+    const icsContent = icsLines.join("\r\n");
+
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `syncforge_schedule_${new Date().toISOString().slice(0, 10)}.ics`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -139,14 +222,51 @@ export default function CalendarView() {
             )}
           </div>
 
-          {/* Export */}
-          <button
-            onClick={handleExport}
-            disabled={events.length === 0}
-            className="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded transition-colors shadow-sm flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Download size={14} /> Export
-          </button>
+          {/* Export Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              disabled={events.length === 0}
+              className={`px-3 py-1.5 text-xs font-medium border rounded transition-colors shadow-sm flex items-center gap-1.5 ${
+                isExportOpen
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  : "text-slate-600 bg-white border-slate-200 hover:bg-slate-50"
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Download size={14} /> Export
+            </button>
+            {isExportOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsExportOpen(false)} />
+                <div className="absolute top-full right-0 mt-1 w-52 bg-white rounded-lg shadow-xl border border-slate-200 py-1 z-50 animate-in slide-in-from-top-1 fade-in duration-100">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-1.5 mb-1 select-none">
+                    Choose Format
+                  </div>
+                  <button
+                    onClick={() => { handleExportJSON(); setIsExportOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
+                    <span>JSON Format (.json)</span>
+                  </button>
+                  <button
+                    onClick={() => { handleExportCSV(); setIsExportOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                    <span>Spreadsheet CSV (.csv)</span>
+                  </button>
+                  <button
+                    onClick={() => { handleExportICS(); setIsExportOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0"></span>
+                    <span>iCalendar Feed (.ics)</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Clear Schedule */}
           {events.length > 0 && (
@@ -199,8 +319,15 @@ export default function CalendarView() {
             }}
             events={events}
             allDaySlot={false}
-            slotMinTime="07:00:00"
-            slotMaxTime="20:00:00"
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
+            slotLabelContent={(arg) => {
+              const text = arg.text;
+              if (/^12/i.test(text)) {
+                return text.replace(/^12/i, "0");
+              }
+              return text;
+            }}
             height="100%"
             eventClassNames="rounded-sm shadow-sm border text-xs p-1 cursor-pointer hover:opacity-90 transition-opacity font-medium"
             eventClick={handleEventClick}

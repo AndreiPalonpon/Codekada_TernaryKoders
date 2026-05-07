@@ -54,6 +54,15 @@ Examples of resolution (assuming today is Wednesday 2026-05-06):
   - "by Friday"       → deadline: "2026-05-08"
   - "2 days before X" → deadline must be 2 days before X's start_after date
 
+RECURRING & FREQUENCY RULES:
+If the user requests a recurring task (e.g. "every day", "daily", "every week", "every Tuesday"), you MUST expand this frequency and generate SEPARATE, INDEPENDENT task objects for EACH individual occurrence from today's date onwards up to the next 7 days (or up to the specified exam/event deadline). Do NOT output a single task representing the recurrence; output multiple task objects (e.g. one daily task object for each day).
+
+PLANNING TIME LIMITS & BUFFER SCOPE:
+Do NOT generate any tasks or recurrences that extend past a maximum 14-day look-ahead window starting from the current date. This provides a safety time buffer so that tasks do not get scheduled indefinitely or in an infinite time scope.
+
+MILESTONE & REFERENCE EVENT EXTRACTION:
+If the user mentions any reference events, exams, classes, meetings, or constraints (e.g. "because I have an exam next week at 7:30 am" or "due to a seminar at 3pm"), you MUST extract that event/milestone itself as a separate, distinct task object with 'fixed_time' set to true, so that it actually appears on the user's calendar.
+
 DEPENDENCY & PREREQUISITE RULES:
 When the user says "review at least N days prior to [event]", you MUST:
   1. Create the main event task with its resolved absolute dates.
@@ -75,7 +84,7 @@ The output MUST be a JSON array of objects, where each object has this EXACT nes
     "deadline": "ISO 8601 date or null",
     "priority": "P1" | "P2" | "P3" | "P4",
     "depends_on": "task_name of prerequisite task, or null",
-    "fixed_time": boolean (MUST be true if the user mentions a specific exact time like "at 3pm")
+    "fixed_time": boolean (MUST be true if the user mentions a specific exact time like "at 3pm" or "from 8am to 10am")
   }
 }
 
@@ -106,6 +115,16 @@ class OllamaGemmaAdapter extends IAIService {
   async generateStandard(workspaceId, assignedTo, userPreferences, textPrompt, base64Images = []) {
     const contextPreamble = this._buildContextPreamble(workspaceId, assignedTo, userPreferences);
 
+    console.log(`\n==========================================`);
+    console.log(`[AI PROMPTING LOGS] - OllamaGemmaAdapter`);
+    console.log(`==========================================`);
+    console.log(`- Workspace ID: ${workspaceId}`);
+    console.log(`- Assigned To: ${assignedTo}`);
+    console.log(`- User Prompt:\n"${textPrompt}"`);
+    console.log(`- Context Preamble:\n${contextPreamble}`);
+    console.log(`- System Instruction:\n${SYSTEM_INSTRUCTION}`);
+    console.log(`==========================================\n`);
+
     const userMessage = {
       role:    "user",
       content: `${contextPreamble}\n\n${textPrompt}`,
@@ -124,7 +143,9 @@ class OllamaGemmaAdapter extends IAIService {
       useSchemaFormat: true, // Use GBNF schema format constraints where available
     });
 
-    return this._parseFlexibleJSON(responseText);
+    const parsedTasks = this._parseFlexibleJSON(responseText);
+    console.log(`[AI PROMPTING LOGS] Parsed ${parsedTasks.length} tasks successfully.`);
+    return parsedTasks;
   }
 
   // ---------------------------------------------------------------------------
@@ -211,7 +232,13 @@ class OllamaGemmaAdapter extends IAIService {
     const now = new Date();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDay = dayNames[now.getDay()];
-    const isoDate = now.toISOString().slice(0, 10);
+    
+    // Calculate local date elements correctly (independent of UTC)
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const date = String(now.getDate()).padStart(2, '0');
+    const isoDate = `${year}-${month}-${date}`;
+    
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
     // Calculate timezone offset in format ±HH:MM
@@ -272,6 +299,12 @@ class OllamaGemmaAdapter extends IAIService {
 
     const json = await response.json();
     const content = json?.message?.content;
+
+    console.log(`\n==========================================`);
+    console.log(`[OLLAMA RAW RESPONSE CONTENT]`);
+    console.log(`==========================================`);
+    console.log(content);
+    console.log(`==========================================\n`);
 
     if (typeof content !== "string" || content.trim() === "") {
       throw new Error(

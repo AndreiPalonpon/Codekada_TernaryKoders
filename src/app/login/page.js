@@ -1,38 +1,86 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [isSignUp, setIsSignUp] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/");
+    }
+  }, [status, router]);
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    setError("");
     await signIn("google", { callbackUrl: "/" });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setError("");
     
-    // Simulation fallback for local dev without provider config
-    setTimeout(() => {
-      setIsLoading(false);
-      
+    try {
       if (isSignUp) {
-        setIsSignUp(false);
-        alert("Account created successfully! Please sign in.");
+        // Signup Flow
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name, email, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to register account.");
+        }
+
+        // Auto sign-in after successful registration
+        const loginRes = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (loginRes?.error) {
+          setIsSignUp(false);
+          setError("Account registered! Please manually sign in.");
+        } else {
+          router.push("/");
+        }
       } else {
+        // Signin Flow
+        const res = await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        });
+
+        if (res?.error) {
+          throw new Error(res.error || "Invalid email or password.");
+        }
+
         router.push("/");
       }
-    }, 1200);
+    } catch (err) {
+      setError(err.message || "An authentication error occurred.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -55,6 +103,12 @@ export default function LoginPage() {
             {isSignUp ? "Enter your details to get started." : "Welcome back! Please enter your details."}
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-semibold animate-fade-in shadow-sm leading-relaxed">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           {isSignUp && (
@@ -136,7 +190,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-8 text-center text-sm text-slate-500 font-medium">
-          {isSignUp ? "Already have an account?" : "Don&apos;t have an account?"}
+          {isSignUp ? "Already have an account?" : "Don't have an account?"}
           <button 
             type="button" 
             onClick={() => setIsSignUp(!isSignUp)}

@@ -1,9 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import WorkspaceLayout from "@/components/workspaces/WorkspaceLayout";
 import MultimodalInput from "@/components/workspaces/MultimodalInput";
+import ManualTaskInput from "@/components/workspaces/ManualTaskInput";
 import TaskBreakdown from "@/components/workspaces/TaskBreakdown";
+import useWorkspaceStore from "@/store/useWorkspaceStore";
+import useScheduleStore from "@/store/useScheduleStore";
 import dynamic from "next/dynamic";
 
 const CalendarView = dynamic(() => import("@/components/schedule-view/CalendarView"), {
@@ -23,9 +26,33 @@ export default function WorkspacePage() {
   const [isRightExpanded, setIsRightExpanded] = useState(true);
   const [activeSection, setActiveSection] = useState("input"); // "input" or "breakdown"
 
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const loadSchedule = useScheduleStore((state) => state.loadSchedule);
+  const isLoading = useScheduleStore((state) => state.isLoading);
+
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      loadSchedule(activeWorkspaceId);
+    }
+  }, [activeWorkspaceId, loadSchedule]);
+
   return (
     <WorkspaceLayout>
-      <div className="flex h-full gap-6">
+      <div className="flex h-full gap-6 relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-50 flex items-center justify-center rounded-xl animate-in fade-in duration-200">
+            <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-2xl p-6 shadow-2xl flex flex-col items-center gap-4 max-w-sm text-center">
+              <div className="relative w-12 h-12">
+                <div className="absolute inset-0 border-4 border-emerald-100 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-800 text-sm">Synchronizing Workspace</h4>
+                <p className="text-xs text-slate-500 mt-1 font-semibold">Calibrating calendar slots & schedule blocks...</p>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Center Stage: Mathematical Scheduler Visualizer */}
         <div className="flex-1 h-full min-w-0 transition-all duration-300">
@@ -51,31 +78,75 @@ export default function WorkspacePage() {
           
           {isRightExpanded ? (
             <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
+              {/* Segmented Control */}
+              <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+                <button 
+                  onClick={() => setActiveSection("input")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "input" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                >
+                  <Bot size={14} />
+                  AI Brain
+                </button>
+                <button 
+                  onClick={() => setActiveSection("manual")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "manual" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                >
+                  <ListChecks size={14} />
+                  Manual Form
+                </button>
+                <button 
+                  onClick={() => setActiveSection("breakdown")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-semibold rounded-md transition-all ${activeSection === "breakdown" ? "bg-white text-slate-800 shadow-sm" : "text-slate-600 hover:text-slate-800"}`}
+                >
+                  <ListChecks size={14} />
+                  Task List
+                </button>
+              </div>
+
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 shadow-sm shrink-0">
-                <strong>Assistant Panel:</strong> This panel appears when you want to add or modify tasks.
+                <strong>Assistant Panel:</strong> Use <strong>AI Brain</strong> to convert notes or images into tasks, or <strong>Manual Form</strong> to bypass AI entirely!
               </div>
               
-              <MultimodalInput 
-                isExpanded={activeSection === "input"} 
-                onToggle={() => setActiveSection(activeSection === "input" ? null : "input")} 
-              />
-              <TaskBreakdown 
-                isExpanded={activeSection === "breakdown"} 
-                onToggle={() => setActiveSection(activeSection === "breakdown" ? null : "breakdown")} 
-              />
+              <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+                {activeSection === "input" && (
+                  <MultimodalInput 
+                    isExpanded={true} 
+                    onToggle={() => {}} 
+                  />
+                )}
+                {activeSection === "manual" && (
+                  <ManualTaskInput 
+                    isExpanded={true} 
+                    onToggle={() => {}} 
+                  />
+                )}
+                {activeSection === "breakdown" && (
+                  <TaskBreakdown 
+                    isExpanded={true} 
+                    onToggle={() => {}} 
+                  />
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-4 mt-4 w-full items-center">
               <button 
-                onClick={() => setIsRightExpanded(true)}
-                className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors group relative" 
-                title="Open Multimodal Input"
+                onClick={() => { setIsRightExpanded(true); setActiveSection("input"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "input" ? "text-emerald-600 bg-emerald-50" : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"}`}
+                title="AI Brain Input"
               >
                 <Bot size={22} />
               </button>
               <button 
-                onClick={() => setIsRightExpanded(true)}
-                className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors group relative" 
+                onClick={() => { setIsRightExpanded(true); setActiveSection("manual"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "manual" ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-blue-600 hover:bg-blue-50"}`}
+                title="Direct Manual Input"
+              >
+                <ListChecks size={22} />
+              </button>
+              <button 
+                onClick={() => { setIsRightExpanded(true); setActiveSection("breakdown"); }}
+                className={`p-2.5 rounded-lg transition-colors group relative ${activeSection === "breakdown" ? "text-slate-800 bg-slate-100" : "text-slate-400 hover:text-slate-800 hover:bg-slate-100"}`}
                 title="View Generated Tasks"
               >
                 <ListChecks size={22} />

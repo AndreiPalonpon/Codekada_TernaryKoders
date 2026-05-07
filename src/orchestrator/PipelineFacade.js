@@ -109,6 +109,9 @@ class PipelineFacade {
     } else if (action === 'missed') {
       interruptedTask.status = 'Pending';
       interruptedTask.schedule_blocks = [];
+    } else if (action === 'complete') {
+      interruptedTask.status = 'Completed';
+      interruptedTask.schedule_blocks = [];
     }
     await interruptedTask.save();
 

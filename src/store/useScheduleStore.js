@@ -23,6 +23,9 @@ const useScheduleStore = create((set, get) => ({
   /** Raw text bound to the multimodal input textarea. */
   textInput: "",
 
+  /** Array of file/link attachments: { type: "image_base64" | "link", content: string, name?: string } */
+  attachments: [],
+
   /** AI Phase 1 parsed task metadata (shown in TaskBreakdown table). */
   aiParsedTasks: [],
 
@@ -60,6 +63,14 @@ const useScheduleStore = create((set, get) => ({
   /** Update the raw text input bound to the <textarea>. */
   setTextInput: (value) => set({ textInput: value }),
 
+  /** Add an attachment. */
+  addAttachment: (attachment) => set((state) => ({ attachments: [...state.attachments, attachment] })),
+
+  /** Remove an attachment by index. */
+  removeAttachment: (index) => set((state) => ({
+    attachments: state.attachments.filter((_, i) => i !== index)
+  })),
+
   /** Update dynamic user preferences. */
   updatePreferences: (newPrefs) => set((state) => ({
     userPreferences: { ...state.userPreferences, ...newPrefs }
@@ -80,7 +91,7 @@ const useScheduleStore = create((set, get) => ({
    * @param {boolean} overwrite - If true, clears the calendar before appending.
    */
   generateSchedule: async (workspaceId = "ws_8f92a", overwrite = false) => {
-    const { textInput, events, userPreferences } = get();
+    const { textInput, attachments, events, userPreferences } = get();
 
     set({ isLoading: true, error: null });
 
@@ -88,12 +99,18 @@ const useScheduleStore = create((set, get) => ({
     const existingEvents = overwrite ? [] : events;
 
     try {
+      const payloadInputs = [];
+      if (textInput.trim()) {
+        payloadInputs.push({ type: "text", content: textInput });
+      }
+      payloadInputs.push(...attachments);
+
       const response = await fetch("/api/schedule/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspace_id: workspaceId,
-          inputs: [{ type: "text", content: textInput }],
+          inputs: payloadInputs,
           existing_events: existingEvents,
           user_preferences: userPreferences,
         }),

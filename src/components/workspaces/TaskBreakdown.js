@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import useScheduleStore from "../../store/useScheduleStore";
 
 /**
@@ -21,7 +22,7 @@ const LOAD_STYLES = {
   Low:    "bg-blue-50 text-blue-600",
 };
 
-export default function TaskBreakdown() {
+export default function TaskBreakdown({ isExpanded = true, onToggle }) {
   const aiParsedTasks = useScheduleStore((state) => state.aiParsedTasks);
   const generateSchedule = useScheduleStore((state) => state.generateSchedule);
   const isLoading = useScheduleStore((state) => state.isLoading);
@@ -31,15 +32,24 @@ export default function TaskBreakdown() {
     : [];
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all duration-300 ${!isExpanded ? 'h-14 shrink-0' : 'flex-1 min-h-[300px]'}`}>
+      <div 
+        onClick={onToggle}
+        className={`p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0 cursor-pointer hover:bg-slate-100 transition-colors ${!isExpanded ? 'border-b-0' : ''}`}
+      >
         <h3 className="font-medium text-slate-800">2. AI Parsed Tasks (JSON Metadata)</h3>
-        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-          {tasks.length > 0 ? `${tasks.length} tasks` : "Read-Only View"}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+            {tasks.length > 0 ? `${tasks.length} tasks` : "Read-Only View"}
+          </span>
+          {isExpanded ? <ChevronUp size={18} className="text-slate-400" /> : <ChevronDown size={18} className="text-slate-400" />}
+        </div>
       </div>
 
-      {tasks.length === 0 ? (
+      {isExpanded && (
+        <>
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {tasks.length === 0 ? (
         /* Empty state */
         <div className="p-8 flex flex-col items-center text-center">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
@@ -52,9 +62,9 @@ export default function TaskBreakdown() {
           </p>
         </div>
       ) : (
-        <div className="p-0">
-          <table className="w-full text-sm text-left text-slate-600">
-            <thead className="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100">
+        <div className="p-0 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
+          <table className="w-full text-sm text-left text-slate-600 relative">
+            <thead className="text-xs text-slate-400 uppercase bg-slate-50 border-b border-slate-100 sticky top-0 z-10">
               <tr>
                 <th className="px-4 py-3 font-medium">Task Name</th>
                 <th className="px-4 py-3 font-medium">Est. Time</th>
@@ -64,24 +74,26 @@ export default function TaskBreakdown() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((task, idx) => (
+              {tasks.map((task, idx) => {
+                const meta = task.metadata || {};
+                return (
                 <tr
-                  key={task.task_name + "_" + idx}
+                  key={meta.task_name + "_" + idx}
                   className={idx !== tasks.length - 1 ? "border-b border-slate-50" : ""}
                 >
-                  <td className="px-4 py-3 font-medium text-slate-800">{task.task_name}</td>
-                  <td className="px-4 py-3">{task.estimated_minutes} min</td>
+                  <td className="px-4 py-3 font-medium text-slate-800">{meta.task_name || "Unnamed Task"}</td>
+                  <td className="px-4 py-3">{meta.estimated_minutes || 0} min</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-                      LOAD_STYLES[task.cognitive_load] || LOAD_STYLES.Medium
+                      LOAD_STYLES[meta.cognitive_load] || LOAD_STYLES.Medium
                     }`}>
-                      {task.cognitive_load}
+                      {meta.cognitive_load || "Medium"}
                     </span>
                   </td>
-                  <td className="px-4 py-3">{task.preferred_window || "Any"}</td>
-                  <td className="px-4 py-3">{task.splittable ? "Yes" : "No"}</td>
+                  <td className="px-4 py-3">{meta.preferred_window || "Any"}</td>
+                  <td className="px-4 py-3">{meta.splittable ? "Yes" : "No"}</td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -99,7 +111,10 @@ export default function TaskBreakdown() {
         >
           {isLoading ? "Generating..." : "Generate Schedule (Run Bin-Packing)"}
         </button>
+        </div>
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 }

@@ -35,7 +35,7 @@ const GENERATION_OPTIONS = {
   temperature: 0.1,   // Low temperature for high key predictability and factual extraction.
   top_k: 32,          // Constraints vocabulary search space.
   top_p: 0.8,         // Limits nucleus sampling bounds.
-  num_predict: 1200,  // Max token output limit (safeguard).
+  num_predict: 4096,  // Increased max token output limit to prevent JSON truncation on large schedules.
 };
 
 // System instruction that forces nested schema output with temporal resolution

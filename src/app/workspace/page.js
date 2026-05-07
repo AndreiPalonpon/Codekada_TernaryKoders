@@ -21,6 +21,7 @@ import { ChevronRight, ChevronLeft, Bot, ListChecks } from "lucide-react";
 
 export default function WorkspacePage() {
   const [isRightExpanded, setIsRightExpanded] = useState(true);
+  const [activeSection, setActiveSection] = useState("input"); // "input" or "breakdown"
 
   return (
     <WorkspaceLayout>
@@ -49,12 +50,19 @@ export default function WorkspacePage() {
           </div>
           
           {isRightExpanded ? (
-            <div className="flex flex-col gap-6 overflow-y-auto pr-2 pb-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 shadow-sm">
-                <strong>Assistant Panel:</strong> This panel appears when you want to add or modify tasks. It acts like an intelligent chat sidebar.
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 shadow-sm shrink-0">
+                <strong>Assistant Panel:</strong> This panel appears when you want to add or modify tasks.
               </div>
-              <MultimodalInput />
-              <TaskBreakdown />
+              
+              <MultimodalInput 
+                isExpanded={activeSection === "input"} 
+                onToggle={() => setActiveSection(activeSection === "input" ? null : "input")} 
+              />
+              <TaskBreakdown 
+                isExpanded={activeSection === "breakdown"} 
+                onToggle={() => setActiveSection(activeSection === "breakdown" ? null : "breakdown")} 
+              />
             </div>
           ) : (
             <div className="flex flex-col gap-4 mt-4 w-full items-center">

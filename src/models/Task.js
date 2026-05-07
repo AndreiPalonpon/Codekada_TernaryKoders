@@ -7,11 +7,21 @@ const TaskSchema = new mongoose.Schema({
 
   // 2. The "Brain" (AI Enriched Metadata)
   metadata: {
-    task_name: { type: String, required: true }, //
-    estimated_minutes: { type: Number, required: true }, //
-    cognitive_load: { type: String, enum: ['Low', 'Medium', 'High'], required: true }, //
-    preferred_window: { type: String }, //
-    splittable: { type: Boolean, default: false } //
+    task_name: { type: String, required: true },
+    estimated_minutes: { type: Number, required: true },
+    cognitive_load: { type: String, enum: ['Low', 'Medium', 'High'], required: true },
+    preferred_window: { type: String },
+    splittable: { type: Boolean, default: false },
+    start_after: { type: String, default: null },
+    deadline: { type: String, default: null },
+    priority: { type: String, enum: ['P1', 'P2', 'P3', 'P4'], default: 'P3' },
+    depends_on: { type: String, default: null },
+    fixed_time: { type: Boolean, default: false },
+    recurrence: {
+      frequency: { type: String, enum: ['DAILY', 'WEEKLY', 'MONTHLY'] },
+      interval: { type: Number },
+      days_of_week: [{ type: String, enum: ['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'] }]
+    }
   },
 
   // 3. The "Hands" (Deterministic Scheduler Output)

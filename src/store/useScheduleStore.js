@@ -389,6 +389,15 @@ const useScheduleStore = create((set, get) => ({
   snoozeTask: async (taskId, delayMinutes = 30, reason = "", options = { applyToFuture: false, blockStart: null }) => {
     set({ isRecalculating: true, error: null });
 
+    const { events } = get();
+    const busyList = events
+      .filter((e) => e.extendedProps?.readOnly || e.extendedProps?.source === "google_calendar")
+      .map((e) => ({
+        start: e.start instanceof Date ? e.start.toISOString() : e.start,
+        end: e.end instanceof Date ? e.end.toISOString() : e.end,
+      }))
+      .filter((e) => e.start && e.end);
+
     try {
       const response = await fetch("/api/schedule/recalculate", {
         method: "PATCH",
@@ -398,7 +407,7 @@ const useScheduleStore = create((set, get) => ({
           interrupted_task_id: taskId,
           action: "snooze",
           delay_minutes: delayMinutes,
-          busy_blocks: [{ busy: [] }],
+          busy_blocks: [{ busy: busyList }],
           triggered_by: "user_mvp",
           snooze_reason: reason,
           apply_to_future: options.applyToFuture,
@@ -435,13 +444,11 @@ const useScheduleStore = create((set, get) => ({
             }
           };
         });
-        const { events } = get();
         get().saveHistory();
         const googleEvents = events.filter(e => e.extendedProps?.source === "google_calendar");
         set({ events: [...googleEvents, ...enrichedEvents] });
       } else {
         // Optimistic local fallback: Shift the event forward instead of deleting it!
-        const { events } = get();
         get().saveHistory();
         const shiftedEvents = events.map((e) => {
           if (e.id !== taskId) return e;
@@ -476,7 +483,6 @@ const useScheduleStore = create((set, get) => ({
       }
     } catch {
       // Offline / no DB — optimistic local shifting fallback
-      const { events } = get();
       get().saveHistory();
       const shiftedEvents = events.map((e) => {
         if (e.id !== taskId) return e;
@@ -509,6 +515,15 @@ const useScheduleStore = create((set, get) => ({
   markTaskComplete: async (taskId) => {
     set({ isRecalculating: true, error: null });
 
+    const { events } = get();
+    const busyList = events
+      .filter((e) => e.extendedProps?.readOnly || e.extendedProps?.source === "google_calendar")
+      .map((e) => ({
+        start: e.start instanceof Date ? e.start.toISOString() : e.start,
+        end: e.end instanceof Date ? e.end.toISOString() : e.end,
+      }))
+      .filter((e) => e.start && e.end);
+
     try {
       await fetch("/api/schedule/recalculate", {
         method: "PATCH",
@@ -518,7 +533,7 @@ const useScheduleStore = create((set, get) => ({
           interrupted_task_id: taskId,
           action: "complete",          // Marks the task as Completed in MongoDB.
           delay_minutes: 0,
-          busy_blocks: [{ busy: [] }],
+          busy_blocks: [{ busy: busyList }],
           triggered_by: "user_mvp",
         }),
       });
@@ -527,7 +542,6 @@ const useScheduleStore = create((set, get) => ({
     }
 
     // Optimistic removal regardless of backend response.
-    const { events } = get();
     get().saveHistory();
     set({
       events: events.filter((e) => e.id !== taskId),

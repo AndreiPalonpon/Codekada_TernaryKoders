@@ -104,10 +104,31 @@ class PipelineFacade {
     }
 
     if (action === 'snooze') {
+      let snoozeBase = new Date();
+      if (interruptedTask.schedule_blocks && interruptedTask.schedule_blocks.length > 0) {
+        const starts = interruptedTask.schedule_blocks
+          .map(b => b.start_time ? new Date(b.start_time).getTime() : null)
+          .filter(t => t !== null);
+        if (starts.length > 0) {
+          snoozeBase = new Date(Math.min(...starts));
+        }
+      }
+
+      const calculatedStartAfter = new Date(snoozeBase.getTime() + delayMinutes * 60000);
+      const finalStartAfter = calculatedStartAfter < new Date() ? new Date() : calculatedStartAfter;
+
       interruptedTask.status = 'Snoozed';
+      if (!interruptedTask.metadata) {
+        interruptedTask.metadata = {};
+      }
+      interruptedTask.metadata.start_after = finalStartAfter.toISOString();
       interruptedTask.schedule_blocks = []; // Clear its current block — will be re-scheduled.
     } else if (action === 'missed') {
       interruptedTask.status = 'Pending';
+      if (!interruptedTask.metadata) {
+        interruptedTask.metadata = {};
+      }
+      interruptedTask.metadata.start_after = new Date().toISOString();
       interruptedTask.schedule_blocks = [];
     } else if (action === 'complete') {
       interruptedTask.status = 'Completed';
@@ -140,6 +161,14 @@ class PipelineFacade {
       await Task.findByIdAndUpdate(task._id, {
         status: 'Scheduled',
         schedule_blocks: task.schedule_blocks,
+      });
+    }
+
+    // Persist the unscheduled tasks.
+    for (const task of unscheduled) {
+      await Task.findByIdAndUpdate(task._id, {
+        status: 'Pending',
+        schedule_blocks: [],
       });
     }
 

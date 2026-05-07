@@ -346,6 +346,12 @@ export async function POST(request) {
           cognitive_load: t.metadata.cognitive_load,
           preferred_window: t.metadata.preferred_window,
           splittable: t.metadata.splittable,
+          start_after: t.metadata.start_after || null,
+          deadline: t.metadata.deadline || null,
+          priority: t.metadata.priority || 'P3',
+          depends_on: t.metadata.depends_on || null,
+          fixed_time: t.metadata.fixed_time || false,
+          recurrence: t.metadata.recurrence || null,
         },
         status: 'Scheduled',
         schedule_blocks: t.schedule_blocks.map(b => ({
@@ -443,6 +449,12 @@ export async function GET(request) {
           cognitive_load: task.metadata.cognitive_load,
           preferred_window: task.metadata.preferred_window,
           splittable: task.metadata.splittable,
+          start_after: task.metadata.start_after,
+          deadline: task.metadata.deadline,
+          priority: task.metadata.priority,
+          depends_on: task.metadata.depends_on,
+          fixed_time: task.metadata.fixed_time,
+          recurrence: task.metadata.recurrence,
         },
       });
 
@@ -528,10 +540,14 @@ export async function DELETE(request) {
     });
 
     if (!parentWorkspace) {
-      return NextResponse.json(
-        { success: false, data: null, error: { code: 'FORBIDDEN', message: 'You do not have access to this task.' } },
-        { status: 403 }
-      );
+      // Fallback: If the workspace document doesn't exist in MongoDB (e.g. ad-hoc/MVP workspace),
+      // allow deletion if the task is assigned to the current user to prevent orphaned items.
+      if (taskToDelete.assigned_to.toString() !== session.user.id.toString()) {
+        return NextResponse.json(
+          { success: false, data: null, error: { code: 'FORBIDDEN', message: 'You do not have access to this task.' } },
+          { status: 403 }
+        );
+      }
     }
 
     await Task.deleteOne({ _id: validTaskId });

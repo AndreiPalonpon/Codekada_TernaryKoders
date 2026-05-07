@@ -140,7 +140,7 @@ class PipelineFacade {
     const activeTasks = await Task.find({
       workspace_id: workspaceId,
       status: { $in: ['Pending', 'Snoozed', 'Scheduled'] },
-    }).lean();
+    }).populate('assigned_to', 'name').lean();
 
     if (activeTasks.length === 0) {
       return this._successResponse({ scheduled: [], unscheduled: [], full: false }, Date.now() - startTime);

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, BarChart2, CheckCircle2, Clock, Settings, LogOut, CreditCard, Moon, MoreVertical, Plus, Flame, Users } from "lucide-react";
 import { FolderKanban, CalendarDays } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import useWorkspaceStore from "../../store/useWorkspaceStore";
+import useScheduleStore from "../../store/useScheduleStore";
 
 // Helper to render dynamic icons
 const renderIcon = (iconName, props) => {
@@ -31,6 +32,45 @@ export default function WorkspaceSidebar({
   const [activeHoverEnv, setActiveHoverEnv] = useState(null);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
+
+  const events = useScheduleStore((state) => state.events);
+
+  // Calculate dynamic metrics from calendar events
+  const appEvents = React.useMemo(() => {
+    return events.filter((event) => event.extendedProps?.source !== "google_calendar");
+  }, [events]);
+
+  const totalTasks = appEvents.length;
+
+  const completedTasks = React.useMemo(() => {
+    return appEvents.filter((e) => e.extendedProps?.status === "Completed").length;
+  }, [appEvents]);
+
+  const focusHours = React.useMemo(() => {
+    const totalMinutes = appEvents.reduce((sum, event) => {
+      if (!event.start || !event.end) return sum;
+      return sum + Math.max(0, new Date(event.end).getTime() - new Date(event.start).getTime()) / 60000;
+    }, 0);
+    return (totalMinutes / 60).toFixed(1);
+  }, [appEvents]);
+
+  const topLoad = React.useMemo(() => {
+    const loadCounts = appEvents.reduce((acc, event) => {
+      const load = event.extendedProps?.cognitive_load || "Medium";
+      acc[load] = (acc[load] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(loadCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+  }, [appEvents]);
+
+  const topAssignee = React.useMemo(() => {
+    const assigneeCounts = appEvents.reduce((acc, event) => {
+      const assignee = event.extendedProps?.assigned_to || "Unassigned";
+      acc[assignee] = (acc[assignee] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(assigneeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+  }, [appEvents]);
 
   const handleAddEnvironment = async () => {
     const name = prompt("Enter workspace name:");
@@ -178,23 +218,66 @@ export default function WorkspaceSidebar({
             isExpanded ? (
               <>
                 <div className="flex items-center justify-between mb-3 px-1">
-                  <h2 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Analytics</h2>
+                  <h2 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Schedule Metrics</h2>
                 </div>
-                <div className="px-3 py-3 bg-slate-50 rounded-xl border border-slate-100 space-y-3 shadow-sm">
+                <div className="px-3.5 py-4 bg-slate-50 rounded-xl border border-slate-150 space-y-4 shadow-sm animate-in fade-in duration-300">
+                  {/* Completed Tasks Progress */}
+                  <div>
+                    <div className="flex justify-between items-center text-xs mb-1.5">
+                      <span className="text-slate-500 font-bold flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-emerald-500" />
+                        Progress
+                      </span>
+                      <span className="font-bold text-slate-800">{completedTasks} / {totalTasks}</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-emerald-500 h-full transition-all duration-500" 
+                        style={{ width: `${totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0}%` }}
+                      ></div>
+                    </div>
+                  </div>
+
+                  {/* Focus Time */}
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white rounded-lg shadow-sm text-emerald-600 border border-slate-100">
-                      <CheckCircle2 size={16} />
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-blue-600 border border-slate-100">
+                      <Clock size={16} />
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase text-slate-500 font-bold tracking-wider leading-none">Completed Tasks</p>
-                      <p className="text-sm font-bold text-slate-800 mt-1">0 <span className="text-xs text-slate-400 font-medium">/ 0</span></p>
+                      <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Focus Scheduled</p>
+                      <p className="text-sm font-bold text-slate-800 mt-1">{focusHours}h</p>
+                    </div>
+                  </div>
+
+                  {/* Top Load */}
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-amber-600 border border-slate-100">
+                      <Flame size={16} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Peak Brain Load</p>
+                      <p className="text-sm font-bold text-slate-800 mt-1">{topLoad}</p>
+                    </div>
+                  </div>
+
+                  {/* Top Assignee */}
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-white rounded-lg shadow-sm text-indigo-600 border border-slate-100">
+                      <Users size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Key Assignee</p>
+                      <p className="text-sm font-bold text-slate-800 mt-1 truncate">{topAssignee}</p>
                     </div>
                   </div>
                 </div>
               </>
             ) : (
               <div className="flex flex-col items-center gap-4 mt-6">
-                <button className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" title="Analytics">
+                <button 
+                  className="p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors" 
+                  title={`Schedule Metrics: ${completedTasks}/${totalTasks} Tasks, ${focusHours}h Focus, Top Load: ${topLoad}, Assignee: ${topAssignee}`}
+                >
                   <BarChart2 size={18} />
                 </button>
               </div>

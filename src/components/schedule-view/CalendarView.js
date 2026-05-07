@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import { Filter, Download, X, RefreshCw, BarChart3, Clock3, Flame, Users } from "lucide-react";
+import { Filter, Download, X, RefreshCw, BarChart3, Clock3, Flame, Users, ChevronDown, ChevronUp } from "lucide-react";
 import EventDetailsModal from "./EventDetailsModal";
 import useScheduleStore from "../../store/useScheduleStore";
 import ConfirmationModal from "../ui/ConfirmationModal";
@@ -208,15 +208,17 @@ export default function CalendarView() {
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col relative w-full">
       {/* Calendar Header Toolbar */}
       <div className="p-4 border-b border-slate-100 flex justify-between items-center shrink-0 w-full bg-slate-50/50">
-        <div>
-          <h3 className="font-semibold text-slate-800 text-lg">Schedule Dashboard</h3>
+        <div className="min-w-0 flex-1 mr-4">
+          <h3 className="font-semibold text-slate-800 text-lg flex items-center gap-2">
+            Schedule Dashboard
+          </h3>
           {events.length > 0 && (
             <p className="text-xs text-slate-500 mt-0.5">
               {events.length} task{events.length !== 1 ? "s" : ""} scheduled
             </p>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 shrink-0">
           {/* Filter Dropdown */}
           <div className="relative">
             <button
@@ -322,77 +324,6 @@ export default function CalendarView() {
         </div>
       </div>
 
-      <div className="border-b border-slate-100 bg-white px-4 py-3 shrink-0">
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
-          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
-            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><BarChart3 size={13} /> Tasks</p>
-            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{analytics.appEvents.length}</p>
-          </div>
-          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
-            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Clock3 size={13} /> Focus Time</p>
-            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{(analytics.totalMinutes / 60).toFixed(1)}h</p>
-          </div>
-          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
-            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Flame size={13} /> Top Load</p>
-            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{analytics.busiestLoad}</p>
-          </div>
-          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
-            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Users size={13} /> Assignee</p>
-            <p className="text-lg font-bold text-slate-800 leading-tight mt-1 truncate">{analytics.busiestAssignee}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setAnalyticsMode("load")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${analyticsMode === "load" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-            >
-              Load
-            </button>
-            <button
-              type="button"
-              onClick={() => setAnalyticsMode("assignee")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${analyticsMode === "assignee" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
-            >
-              Assignee
-            </button>
-          </div>
-          <div className="flex-1 flex items-center gap-2 min-w-0">
-            {(analyticsMode === "load"
-              ? Object.entries({ High: analytics.loadCounts.High || 0, Medium: analytics.loadCounts.Medium || 0, Low: analytics.loadCounts.Low || 0 })
-              : Object.entries(analytics.assigneeCounts)
-            ).map(([label, count]) => {
-              const maxCount = Math.max(1, ...(analyticsMode === "load" ? Object.values(analytics.loadCounts) : Object.values(analytics.assigneeCounts)));
-              const width = `${Math.max(6, (count / maxCount) * 100)}%`;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => analyticsMode === "load" && setFilter(label === activeFilter ? null : label)}
-                  className="flex-1 min-w-0 text-left group"
-                  disabled={analyticsMode !== "load"}
-                  title={`${label}: ${count}`}
-                >
-                  <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
-                    <span className="truncate">{label}</span>
-                    <span>{count}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${
-                        activeFilter === label ? "bg-emerald-600" : "bg-slate-400 group-hover:bg-emerald-500"
-                      }`}
-                      style={{ width }}
-                    />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
       
       {/* Calendar Grid Area */}
       <div ref={wrapperRef} className="flex-1 p-4 overflow-hidden relative custom-calendar-wrapper w-full">

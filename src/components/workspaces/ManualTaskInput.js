@@ -57,13 +57,13 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
 
   return (
     <div className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col transition-all duration-300 ${!isExpanded ? 'h-14 shrink-0' : 'flex-1 min-h-[300px]'}`}>
-      <div 
+      <div
         onClick={onToggle}
         className={`p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0 cursor-pointer hover:bg-slate-100 transition-colors ${!isExpanded ? 'border-b-0' : ''}`}
       >
         <h3 className="font-semibold text-slate-800 flex items-center gap-2">
           <Layers size={18} className="text-emerald-600" />
-          Direct Manual Task
+          1. Enter Task (Direct Form)
           {!isExpanded && taskName && <span className="text-xs font-normal text-slate-400 ml-2">({taskName})</span>}
         </h3>
         <div className="flex items-center gap-3">
@@ -72,7 +72,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
           </span>
         </div>
       </div>
-      
+
       {isExpanded && (
         <form onSubmit={handleSubmit} className="p-4 flex-1 overflow-y-auto space-y-4 text-sm text-slate-700">
           {successMsg && (
@@ -90,7 +90,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
           {/* Task Name */}
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Task Title</label>
-            <input 
+            <input
               type="text"
               required
               className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50/50 text-slate-800"
@@ -104,7 +104,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
             {/* Duration */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Duration (Min)</label>
-              <input 
+              <input
                 type="number"
                 min="5"
                 required
@@ -117,7 +117,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
             {/* Priority */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Priority</label>
-              <select 
+              <select
                 className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50/50 text-slate-800 font-medium"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
@@ -134,7 +134,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
             {/* Cognitive Load */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Brain Load</label>
-              <select 
+              <select
                 className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50/50 text-slate-800 font-medium"
                 value={cognitiveLoad}
                 onChange={(e) => setCognitiveLoad(e.target.value)}
@@ -148,7 +148,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
             {/* Preferred Window */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Preferred Time</label>
-              <select 
+              <select
                 className="w-full p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-slate-50/50 text-slate-800 font-medium"
                 value={preferredWindow}
                 onChange={(e) => setPreferredWindow(e.target.value)}
@@ -170,9 +170,9 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={splittable}
                 onChange={(e) => setSplittable(e.target.checked)}
               />
@@ -190,9 +190,9 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={fixedTime}
                 onChange={(e) => setFixedTime(e.target.checked)}
               />
@@ -205,7 +205,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
             <div className="space-y-3 p-3 bg-blue-50/30 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-top-2 duration-200">
               <div>
                 <label className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">Start Time</label>
-                <input 
+                <input
                   type="datetime-local"
                   required={fixedTime}
                   className="w-full p-2 border border-slate-200 rounded bg-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
@@ -215,7 +215,7 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">End Time</label>
-                <input 
+                <input
                   type="datetime-local"
                   required={fixedTime}
                   className="w-full p-2 border border-slate-200 rounded bg-white text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
@@ -238,9 +238,9 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
               </div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={isOverwrite}
                 onChange={(e) => setIsOverwrite(e.target.checked)}
               />
@@ -252,11 +252,10 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
           <button
             type="submit"
             disabled={isLoading || !taskName.trim()}
-            className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-all shadow-md flex items-center justify-center gap-2 group ${
-              isLoading || !taskName.trim()
+            className={`w-full py-2.5 text-sm font-semibold rounded-lg transition-all shadow-md flex items-center justify-center gap-2 group ${isLoading || !taskName.trim()
                 ? "bg-slate-200 cursor-not-allowed text-slate-400 shadow-none"
                 : "bg-slate-900 hover:bg-slate-800 hover:shadow-lg text-white"
-            }`}
+              }`}
           >
             {isLoading ? "Scheduling..." : "Schedule Task"}
             {isLoading ? (

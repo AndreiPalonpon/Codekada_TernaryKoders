@@ -49,8 +49,10 @@ const GenerateRequestSchema = z.object({
   workspace_id: z.string().min(1, 'workspace_id is required.'),
   inputs: z.array(
     z.object({
-      type: z.enum(['text', 'image_base64', 'link']),
+      type: z.enum(['text', 'image_base64', 'link', 'document', 'document_base64']),
       content: z.string(),
+      name: z.string().optional(),
+      mimeType: z.string().optional(),
     })
   ).optional(),
   manual_tasks: z.array(
@@ -121,12 +123,21 @@ function colorForLoad(cognitiveLoad) {
  * @param {Array<Object>} scheduledTasks - Tasks with .metadata and .schedule_blocks[].
  * @returns {Array<Object>} FullCalendar-compatible event array.
  */
-function mapScheduledToCalendarEvents(scheduledTasks) {
+function mapScheduledToCalendarEvents(scheduledTasks, currentUserName = 'Current User') {
   const events = [];
 
   for (const task of scheduledTasks) {
     const color = colorForLoad(task.metadata.cognitive_load);
     const taskId = task._id ? task._id.toString() : `gen_${Date.now()}_${events.length}`;
+
+    let assigneeName = currentUserName;
+    if (task.assigned_to) {
+      if (typeof task.assigned_to === 'object' && task.assigned_to.name) {
+        assigneeName = task.assigned_to.name;
+      } else if (task.assigned_to.toString() !== 'user_mvp') {
+        assigneeName = currentUserName;
+      }
+    }
 
     for (const block of task.schedule_blocks) {
       events.push({
@@ -142,7 +153,7 @@ function mapScheduledToCalendarEvents(scheduledTasks) {
           estimated_minutes: task.metadata.estimated_minutes,
           preferred_window: task.metadata.preferred_window,
           splittable: task.metadata.splittable,
-          assigned_to: task.assigned_to || 'Current User',
+          assigned_to: assigneeName,
         },
       });
     }
@@ -228,18 +239,27 @@ export async function POST(request) {
     } else {
       // ── Parse multimodal inputs into the shapes the AI adapter expects ──
       const textPrompt = (inputs || [])
-        .filter((i) => i.type === 'text' || i.type === 'link')
-        .map((i) => i.type === 'link' ? `Attached link: ${i.content}` : i.content)
-        .join('\n');
+        .filter((i) => i.type === 'text' || i.type === 'link' || i.type === 'document')
+        .map((i) => {
+          if (i.type === 'link') return `Attached link: ${i.content}`;
+          if (i.type === 'document') return `[Content from uploaded file "${i.name || 'document'}"]: \n${i.content}`;
+          return i.content;
+        })
+        .join('\n\n');
 
       const base64Images = (inputs || [])
-        .filter((i) => i.type === 'image_base64')
-        .map((i) => ({
-          inlineData: {
-            mimeType: i.content.split(';')[0].replace('data:', '') || 'image/png',
-            data: i.content.split(',')[1],
-          },
-        }));
+        .filter((i) => i.type === 'image_base64' || i.type === 'document_base64')
+        .map((i) => {
+          const contentParts = i.content.split(',');
+          const mimeType = i.mimeType || (i.content.split(';')[0].replace('data:', '')) || 'application/pdf';
+          const base64Data = contentParts[1] || contentParts[0];
+          return {
+            inlineData: {
+              mimeType,
+              data: base64Data,
+            },
+          };
+        });
 
       // ── Phase 1: The Brain (Gemini AI) ──────────────────────────────────
       // ServiceManager provides FallbackAIDecorator(geminiAdapter).
@@ -366,9 +386,10 @@ export async function POST(request) {
 
     // ── Map to FullCalendar events ──────────────────────────────────────
 
+    const currentUserName = session?.user?.name || 'Current User';
     const calendarEvents = [
       ...mapGoogleEventsToCalendarEvents(googleCalendarEvents),
-      ...mapScheduledToCalendarEvents(savedTasks),
+      ...mapScheduledToCalendarEvents(savedTasks, currentUserName),
     ];
 
     const processingMs = Date.now() - startTime;
@@ -435,10 +456,11 @@ export async function GET(request) {
     const dbTasks = await Task.find({
       workspace_id: validWorkspaceId,
       status: { $in: ['Scheduled', 'Snoozed', 'Pending'] },
-    });
+    }).populate('assigned_to', 'name');
 
     const aiTasks = [];
     const calendarEvents = [];
+    const currentUserName = session?.user?.name || 'Current User';
 
     for (const task of dbTasks) {
       // Build Phase 1 metadata lists
@@ -460,6 +482,15 @@ export async function GET(request) {
       });
 
       const color = colorForLoad(task.metadata.cognitive_load);
+      let assigneeName = currentUserName;
+      if (task.assigned_to) {
+        if (typeof task.assigned_to === 'object' && task.assigned_to.name) {
+          assigneeName = task.assigned_to.name;
+        } else if (task.assigned_to.toString() !== 'user_mvp') {
+          assigneeName = currentUserName;
+        }
+      }
+
       for (const block of task.schedule_blocks) {
         calendarEvents.push({
           id: task._id.toString(),
@@ -474,7 +505,7 @@ export async function GET(request) {
             estimated_minutes: task.metadata.estimated_minutes,
             preferred_window: task.metadata.preferred_window,
             splittable: task.metadata.splittable,
-            assigned_to: 'Current User',
+            assigned_to: assigneeName,
           },
         });
       }

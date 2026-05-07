@@ -39,7 +39,7 @@ export default function TaskBreakdown({ isExpanded = true, onToggle }) {
         onClick={onToggle}
         className={`p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0 cursor-pointer hover:bg-slate-100 transition-colors ${!isExpanded ? 'border-b-0' : ''}`}
       >
-        <h3 className="font-medium text-slate-800">2. AI Parsed Tasks (JSON Metadata)</h3>
+        <h3 className="font-medium text-slate-800">2. Reschedule & Rearrange Tasks</h3>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
             {tasks.length > 0 ? `${tasks.length} tasks` : "Read-Only View"}

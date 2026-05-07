@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import pipeline from '@/orchestrator/PipelineFacade';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 /**
  * PATCH /api/schedule/recalculate
@@ -23,14 +25,9 @@ const RecalculateRequestSchema = z.object({
   workspace_id: z.string().min(1),
   interrupted_task_id: z.string().min(1),
   action: z.enum(['snooze', 'missed', 'complete']),
-  delay_minutes: z.number().min(0).optional(),
-  busy_blocks: z.array(z.object({
-    busy: z.array(z.object({
-      start: z.string(),
-      end: z.string(),
-    })),
-  })),
-  triggered_by: z.string().min(1),
+  delay_minutes: z.number().nonnegative().optional(),
+  busy_blocks: z.array(z.any()).optional(),
+  triggered_by: z.string().optional(),
 });
 
 export async function PATCH(request) {
@@ -68,8 +65,11 @@ export async function PATCH(request) {
     triggered_by
   );
 
+  const session = await getServerSession(authOptions);
+  const currentUserName = session?.user?.name || 'Current User';
+
   if (result.success && result.data && result.data.scheduled) {
-    result.data.scheduled = mapScheduledToCalendarEvents(result.data.scheduled);
+    result.data.scheduled = mapScheduledToCalendarEvents(result.data.scheduled, currentUserName);
   }
 
   const statusCode = result.success ? 200 : (result.error?.code === 'TASK_NOT_FOUND' ? 404 : 500);
@@ -87,12 +87,21 @@ function colorForLoad(cognitiveLoad) {
   return LOAD_COLORS[cognitiveLoad] || LOAD_COLORS.Medium;
 }
 
-function mapScheduledToCalendarEvents(scheduledTasks) {
+function mapScheduledToCalendarEvents(scheduledTasks, currentUserName = 'Current User') {
   const events = [];
 
   for (const task of scheduledTasks) {
     const color = colorForLoad(task.metadata?.cognitive_load || 'Medium');
     const taskId = task._id ? task._id.toString() : `gen_${Date.now()}_${events.length}`;
+
+    let assigneeName = currentUserName;
+    if (task.assigned_to) {
+      if (typeof task.assigned_to === 'object' && task.assigned_to.name) {
+        assigneeName = task.assigned_to.name;
+      } else if (task.assigned_to.toString() !== 'user_mvp') {
+        assigneeName = currentUserName;
+      }
+    }
 
     for (const block of (task.schedule_blocks || [])) {
       events.push({
@@ -108,7 +117,7 @@ function mapScheduledToCalendarEvents(scheduledTasks) {
           estimated_minutes: task.metadata?.estimated_minutes,
           preferred_window: task.metadata?.preferred_window,
           splittable: task.metadata?.splittable,
-          assigned_to: task.assigned_to || 'Current User',
+          assigned_to: assigneeName,
         },
       });
     }

@@ -21,10 +21,16 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
   const [endTime, setEndTime] = useState("");
   const [isOverwrite, setIsOverwrite] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [formError, setFormError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError("");
     if (!taskName.trim()) return;
+    if (fixedTime && startTime && endTime && new Date(endTime) <= new Date(startTime)) {
+      setFormError("End time must be after the start time.");
+      return;
+    }
 
     const manualTask = {
       task_name: taskName,
@@ -42,7 +48,10 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
     if (res?.success) {
       setSuccessMsg("Task successfully scheduled!");
       setTaskName("");
+      setFormError("");
       setTimeout(() => setSuccessMsg(""), 3000);
+    } else if (res?.error?.message) {
+      setFormError(res.error.message);
     }
   };
 
@@ -68,7 +77,13 @@ export default function ManualTaskInput({ isExpanded = true, onToggle }) {
         <form onSubmit={handleSubmit} className="p-4 flex-1 overflow-y-auto space-y-4 text-sm text-slate-700">
           {successMsg && (
             <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold rounded-lg text-center animate-pulse">
-              🎉 {successMsg}
+              {successMsg}
+            </div>
+          )}
+
+          {formError && (
+            <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-lg text-center">
+              {formError}
             </div>
           )}
 

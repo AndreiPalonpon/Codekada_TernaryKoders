@@ -22,6 +22,13 @@ export default function MultimodalInput({ isExpanded = true, onToggle, embedMode
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const fileInputRef = useRef(null);
 
+  const appendPrompt = (promptText) => {
+    const nextText = textInput.trim()
+      ? `${textInput.trim()}\n\n${promptText}`
+      : promptText;
+    setTextInput(nextText);
+  };
+
   const handleAnalyze = () => {
     if (isOverwrite && events.length > 0) {
       setIsConfirmOpen(true);
@@ -87,13 +94,25 @@ export default function MultimodalInput({ isExpanded = true, onToggle, embedMode
     
     {/* Suggestion Chips */}
     <div className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-      <button type="button" className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+      <button
+        type="button"
+        onClick={() => appendPrompt("Draft a study plan for my upcoming deadlines. Split large tasks into realistic focus blocks.")}
+        className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium"
+      >
         Draft Study Plan
       </button>
-      <button type="button" className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+      <button
+        type="button"
+        onClick={() => appendPrompt("Schedule one 60-minute focus session for my highest priority task today.")}
+        className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium"
+      >
         Schedule 1hr Focus
       </button>
-      <button type="button" className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium">
+      <button
+        type="button"
+        onClick={() => appendPrompt("Break down this class or project link into actionable tasks with durations, priorities, and preferred time windows: ")}
+        className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 text-xs rounded-full transition-colors border border-transparent hover:border-emerald-200 font-medium"
+      >
         Break down Canvas Link
       </button>
     </div>

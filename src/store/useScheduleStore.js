@@ -14,6 +14,27 @@ import useWorkspaceStore from "./useWorkspaceStore";
  */
 const MAX_UNDO_HISTORY = 5;
 
+const addMinutesToEvent = (event, minutes, reason = "") => {
+  const newStart = event.start ? new Date(new Date(event.start).getTime() + minutes * 60000) : null;
+  const newEnd = event.end ? new Date(new Date(event.end).getTime() + minutes * 60000) : null;
+  let desc = event.extendedProps?.description || "";
+
+  if (reason.trim()) {
+    desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium"><strong>Snoozed by ${minutes}m:</strong> "${reason}"</div>`;
+  }
+
+  return {
+    ...event,
+    start: newStart,
+    end: newEnd,
+    extendedProps: {
+      ...(event.extendedProps || {}),
+      description: desc,
+      status: "Snoozed",
+    },
+  };
+};
+
 const useScheduleStore = create((set, get) => ({
 
   // ---------------------------------------------------------------------------
@@ -434,7 +455,7 @@ const useScheduleStore = create((set, get) => ({
 
           let desc = e.description || e.extendedProps?.description || "";
           if (reason.trim()) {
-            desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
+            desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium"><strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
           }
           return {
             ...e,
@@ -446,7 +467,28 @@ const useScheduleStore = create((set, get) => ({
         });
         get().saveHistory();
         const googleEvents = events.filter(e => e.extendedProps?.source === "google_calendar");
-        set({ events: [...googleEvents, ...enrichedEvents] });
+        const returnedIds = new Set(enrichedEvents.map((event) => event.id));
+        const targetEvents = events.filter((event) => event.id === taskId);
+        const locallyShiftedTargetEvents = targetEvents.map((event) =>
+          addMinutesToEvent(event, delayMinutes, reason)
+        );
+        const missingShiftedTargetEvents = locallyShiftedTargetEvents.filter(
+          (event) => !returnedIds.has(event.id)
+        );
+        const preservedLocalEvents = events.filter((event) =>
+          event.extendedProps?.source !== "google_calendar" &&
+          event.id !== taskId &&
+          !returnedIds.has(event.id)
+        );
+
+        set({
+          events: [
+            ...googleEvents,
+            ...preservedLocalEvents,
+            ...enrichedEvents,
+            ...missingShiftedTargetEvents,
+          ],
+        });
       } else {
         // Optimistic local fallback: Shift the event forward instead of deleting it!
         get().saveHistory();
@@ -463,21 +505,7 @@ const useScheduleStore = create((set, get) => ({
              }
           }
 
-          const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
-          const newEnd = e.end ? new Date(new Date(e.end).getTime() + delayMinutes * 60000) : null;
-          let desc = e.extendedProps?.description || "";
-          if (reason.trim()) {
-            desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
-          }
-          return {
-            ...e,
-            start: newStart,
-            end: newEnd,
-            extendedProps: {
-              ...(e.extendedProps || {}),
-              description: desc
-            }
-          };
+          return addMinutesToEvent(e, delayMinutes, reason);
         });
         set({ events: shiftedEvents });
       }
@@ -486,21 +514,7 @@ const useScheduleStore = create((set, get) => ({
       get().saveHistory();
       const shiftedEvents = events.map((e) => {
         if (e.id !== taskId) return e;
-        const newStart = e.start ? new Date(new Date(e.start).getTime() + delayMinutes * 60000) : null;
-        const newEnd = e.end ? new Date(new Date(e.end).getTime() + delayMinutes * 60000) : null;
-        let desc = e.extendedProps?.description || "";
-        if (reason.trim()) {
-          desc += `<div class="mt-3 pt-2.5 border-t border-dashed border-slate-200 text-xs text-slate-500 font-medium">🕒 <strong>Snoozed by ${delayMinutes}m:</strong> "${reason}"</div>`;
-        }
-        return {
-          ...e,
-          start: newStart,
-          end: newEnd,
-          extendedProps: {
-            ...(e.extendedProps || {}),
-            description: desc
-          }
-        };
+        return addMinutesToEvent(e, delayMinutes, reason);
       });
       set({ events: shiftedEvents });
     } finally {

@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/auth';
 import { getGoogleCalendarEvents } from '@/lib/google/calendar';
 import dbConnect from '@/lib/mongodb';
 import Task from '@/models/Task';
+import Workspace from '@/models/Workspace';
 import mongoose from 'mongoose';
 
 /**
@@ -48,7 +49,7 @@ const GenerateRequestSchema = z.object({
   workspace_id: z.string().min(1, 'workspace_id is required.'),
   inputs: z.array(
     z.object({
-      type: z.enum(['text', 'image_base64']),
+      type: z.enum(['text', 'image_base64', 'link']),
       content: z.string(),
     })
   ).optional(),
@@ -227,8 +228,8 @@ export async function POST(request) {
     } else {
       // ── Parse multimodal inputs into the shapes the AI adapter expects ──
       const textPrompt = (inputs || [])
-        .filter((i) => i.type === 'text')
-        .map((i) => i.content)
+        .filter((i) => i.type === 'text' || i.type === 'link')
+        .map((i) => i.type === 'link' ? `Attached link: ${i.content}` : i.content)
         .join('\n');
 
       const base64Images = (inputs || [])
@@ -565,4 +566,3 @@ export async function DELETE(request) {
     );
   }
 }
-

@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import dayGridPlugin from "@fullcalendar/daygrid";
-import { Filter, Download, X, RefreshCw } from "lucide-react";
+import { Filter, Download, X, RefreshCw, BarChart3, Clock3, Flame, Users } from "lucide-react";
 import EventDetailsModal from "./EventDetailsModal";
 import useScheduleStore from "../../store/useScheduleStore";
 import ConfirmationModal from "../ui/ConfirmationModal";
@@ -28,8 +28,38 @@ export default function CalendarView() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [analyticsMode, setAnalyticsMode] = useState("load");
   const calendarRef = useRef(null);
   const wrapperRef = useRef(null);
+
+  const analytics = useMemo(() => {
+    const appEvents = rawEvents.filter((event) => event.extendedProps?.source !== "google_calendar");
+    const totalMinutes = appEvents.reduce((sum, event) => {
+      if (!event.start || !event.end) return sum;
+      return sum + Math.max(0, new Date(event.end).getTime() - new Date(event.start).getTime()) / 60000;
+    }, 0);
+    const loadCounts = appEvents.reduce((acc, event) => {
+      const load = event.extendedProps?.cognitive_load || "Medium";
+      acc[load] = (acc[load] || 0) + 1;
+      return acc;
+    }, {});
+    const assigneeCounts = appEvents.reduce((acc, event) => {
+      const assignee = event.extendedProps?.assigned_to || "Unassigned";
+      acc[assignee] = (acc[assignee] || 0) + 1;
+      return acc;
+    }, {});
+    const busiestLoad = Object.entries(loadCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+    const busiestAssignee = Object.entries(assigneeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
+
+    return {
+      appEvents,
+      totalMinutes,
+      loadCounts,
+      assigneeCounts,
+      busiestLoad,
+      busiestAssignee,
+    };
+  }, [rawEvents]);
 
   // Auto-resize FullCalendar when layout/sidebar changes
   useEffect(() => {
@@ -289,6 +319,78 @@ export default function CalendarView() {
             <RefreshCw size={14} className={isSyncingGoogleCalendar ? "animate-spin" : ""} />
             {isSyncingGoogleCalendar ? "Syncing..." : "Sync Google Cal"}
           </button>
+        </div>
+      </div>
+
+      <div className="border-b border-slate-100 bg-white px-4 py-3 shrink-0">
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
+          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><BarChart3 size={13} /> Tasks</p>
+            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{analytics.appEvents.length}</p>
+          </div>
+          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Clock3 size={13} /> Focus Time</p>
+            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{(analytics.totalMinutes / 60).toFixed(1)}h</p>
+          </div>
+          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Flame size={13} /> Top Load</p>
+            <p className="text-lg font-bold text-slate-800 leading-tight mt-1">{analytics.busiestLoad}</p>
+          </div>
+          <div className="border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+            <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1.5"><Users size={13} /> Assignee</p>
+            <p className="text-lg font-bold text-slate-800 leading-tight mt-1 truncate">{analytics.busiestAssignee}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+            <button
+              type="button"
+              onClick={() => setAnalyticsMode("load")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${analyticsMode === "load" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+            >
+              Load
+            </button>
+            <button
+              type="button"
+              onClick={() => setAnalyticsMode("assignee")}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${analyticsMode === "assignee" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}
+            >
+              Assignee
+            </button>
+          </div>
+          <div className="flex-1 flex items-center gap-2 min-w-0">
+            {(analyticsMode === "load"
+              ? Object.entries({ High: analytics.loadCounts.High || 0, Medium: analytics.loadCounts.Medium || 0, Low: analytics.loadCounts.Low || 0 })
+              : Object.entries(analytics.assigneeCounts)
+            ).map(([label, count]) => {
+              const maxCount = Math.max(1, ...(analyticsMode === "load" ? Object.values(analytics.loadCounts) : Object.values(analytics.assigneeCounts)));
+              const width = `${Math.max(6, (count / maxCount) * 100)}%`;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => analyticsMode === "load" && setFilter(label === activeFilter ? null : label)}
+                  className="flex-1 min-w-0 text-left group"
+                  disabled={analyticsMode !== "load"}
+                  title={`${label}: ${count}`}
+                >
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+                    <span className="truncate">{label}</span>
+                    <span>{count}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        activeFilter === label ? "bg-emerald-600" : "bg-slate-400 group-hover:bg-emerald-500"
+                      }`}
+                      style={{ width }}
+                    />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
       

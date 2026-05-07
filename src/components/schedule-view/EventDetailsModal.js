@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, CheckCircle, Edit, Trash2, Clock, User, Activity, AlarmClock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, CheckCircle, Edit, Trash2, Clock, User, Activity, AlarmClock, CalendarPlus } from "lucide-react";
 import useScheduleStore from "../../store/useScheduleStore";
 
 /**
@@ -15,13 +15,23 @@ export default function EventDetailsModal({ event, onClose }) {
   const markTaskComplete = useScheduleStore((state) => state.markTaskComplete);
   const deleteTask = useScheduleStore((state) => state.deleteTask);
   const snoozeTask = useScheduleStore((state) => state.snoozeTask);
+  const addEventToGoogleCalendar = useScheduleStore((state) => state.addEventToGoogleCalendar);
   const isRecalculating = useScheduleStore((state) => state.isRecalculating);
+  const isWritingGoogleCalendar = useScheduleStore((state) => state.isWritingGoogleCalendar);
 
   const [snoozeMinutes, setSnoozeMinutes] = useState(30);
+  const [createdGoogleEvent, setCreatedGoogleEvent] = useState(null);
+
+  useEffect(() => {
+    setCreatedGoogleEvent(null);
+  }, [event?.id]);
 
   if (!event) return null;
 
   const isReadOnly = event.extendedProps?.readOnly;
+  const isExportedToGoogleCalendar = Boolean(
+    event.extendedProps?.google_event_id || createdGoogleEvent?.id
+  );
 
   const handleComplete = () => {
     if (isReadOnly) return;
@@ -39,6 +49,18 @@ export default function EventDetailsModal({ event, onClose }) {
     if (isReadOnly) return;
     snoozeTask(event.id, snoozeMinutes);
     onClose();
+  };
+
+  const handleAddToGoogleCalendar = async () => {
+    if (isReadOnly || isExportedToGoogleCalendar) return;
+
+    const result = await addEventToGoogleCalendar(event);
+    if (!result.success) {
+      alert(result.error?.message || "Failed to add event to Google Calendar.");
+      return;
+    }
+
+    setCreatedGoogleEvent(result.event);
   };
 
   return (
@@ -150,6 +172,20 @@ export default function EventDetailsModal({ event, onClose }) {
             </span>
           )}
           <div className="flex gap-2">
+            {!isReadOnly && (
+              <button
+                onClick={handleAddToGoogleCalendar}
+                disabled={isWritingGoogleCalendar || isExportedToGoogleCalendar}
+                className="px-4 py-2 text-sm font-medium text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 shadow-sm rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CalendarPlus size={16} />
+                {isWritingGoogleCalendar
+                  ? "Adding..."
+                  : isExportedToGoogleCalendar
+                    ? "Added to Google"
+                    : "Add to Google"}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm rounded-lg transition-colors flex items-center gap-1.5"

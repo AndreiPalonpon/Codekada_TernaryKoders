@@ -94,8 +94,8 @@ export default function EnvironmentPicker() {
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
       <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 justify-between shrink-0 shadow-sm sticky top-0 z-50">
         <div className="flex items-center gap-3 w-1/3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm border border-emerald-500">S</div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-none">SyncForge</h1>
+          <img src="/Synkrohan Icon.png" alt="Synkrohan" className="w-8 h-8 object-contain" />
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 leading-none">Synkrohan</h1>
         </div>
         <div className="w-1/3 flex justify-center">
           <div className="relative w-full max-w-lg group">
@@ -139,7 +139,7 @@ export default function EnvironmentPicker() {
                         <div className="w-2 h-2 mt-1.5 rounded-full bg-emerald-500 shrink-0"></div>
                         <div>
                           <p className="text-xs font-bold text-slate-800">Workspace Calibrated</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5 font-medium">SyncForge successfully optimized your workspace planner slots.</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5 font-medium">Synkrohan successfully optimized your workspace planner slots.</p>
                           <span className="text-[9px] text-slate-400 font-bold block mt-1">2 hours ago</span>
                         </div>
                       </div>
@@ -158,7 +158,7 @@ export default function EnvironmentPicker() {
                       <div className="flex items-start gap-2.5">
                         <div className="w-2 h-2 mt-1.5 rounded-full bg-purple-500 shrink-0"></div>
                         <div>
-                          <p className="text-xs font-bold text-slate-800">Welcome to SyncForge!</p>
+                          <p className="text-xs font-bold text-slate-800">Welcome to Synkrohan!</p>
                           <p className="text-[10px] text-slate-500 mt-0.5 font-medium">Start creating workspaces and planning smart tasks.</p>
                           <span className="text-[9px] text-slate-400 font-bold block mt-1">2 days ago</span>
                         </div>
@@ -215,13 +215,13 @@ export default function EnvironmentPicker() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-bold text-slate-800 truncate">{session?.user?.name || "Active Session User"}</p>
-                      <p className="text-[10px] text-slate-500 font-medium truncate">{session?.user?.email || "user@syncforge.app"}</p>
+                      <p className="text-[10px] text-slate-500 font-medium truncate">{session?.user?.email || "user@synkrohan.app"}</p>
                     </div>
                   </div>
                   <div className="px-4 py-2 border-b border-slate-100 bg-slate-50">
                     <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       <span>Plan Status</span>
-                      <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-bold">SyncForge Elite</span>
+                      <span className="text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full font-bold">Synkrohan Elite</span>
                     </div>
                   </div>
                   <div className="py-1">

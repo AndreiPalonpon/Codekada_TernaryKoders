@@ -91,8 +91,8 @@ export default function LoginPage() {
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
 
         <div className="flex items-center justify-center gap-3 mb-8 mt-2">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-md border border-emerald-500">S</div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">SyncForge</h1>
+          <img src="/Synkrohan Icon.png" alt="Synkrohan" className="w-10 h-10 object-contain" />
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Synkrohan</h1>
         </div>
 
         <div className="mb-8 text-center">

@@ -5,7 +5,7 @@ import AuthProvider from "@/components/providers/AuthProvider";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata = {
-  title: "SyncForge | Hybrid Scheduler",
+  title: "Synkrohan | Hybrid Scheduler",
   description: "An intelligent, collaborative, hybrid time-blocking platform.",
 };
 

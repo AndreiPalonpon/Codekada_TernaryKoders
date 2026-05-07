@@ -90,19 +90,11 @@ export default function WorkspaceSidebar({
       </button>
 
       {/* Brand Region */}
-      <div className={`p-4 border-b border-slate-100 h-16 flex items-center ${isExpanded ? 'justify-start' : 'justify-center'}`}>
+      <div className={`p-2 border-b border-slate-100 h-16 flex items-center ${isExpanded ? 'justify-start px-3.5' : 'justify-center'}`}>
         {isExpanded ? (
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">S</div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-slate-900 leading-none">SyncForge</h1>
-              <p className="text-[10px] text-emerald-600 font-semibold uppercase mt-0.5 tracking-wider">Hybrid Scheduler</p>
-            </div>
-          </div>
+          <img src="/Synkorhan Brand.png" alt="Synkrohan" className="h-9 object-contain" />
         ) : (
-          <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-            S
-          </div>
+          <img src="/Synkrohan Icon.png" alt="Synkrohan" className="w-8 h-8 object-contain" />
         )}
       </div>
       

@@ -1,16 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check, Settings } from "lucide-react";
+import { Search, Bell, Zap, UserPlus, Globe, Link as LinkIcon, Check, Settings, LogOut } from "lucide-react";
+import { signOut } from "next-auth/react";
 import useWorkspaceStore from "../../store/useWorkspaceStore";
 import SettingsModal from "./SettingsModal";
 
-export default function WorkspaceHeader({ 
-  title = "Workspace", 
-  subtitle = "Details", 
+export default function WorkspaceHeader({
+  title = "Workspace",
+  subtitle = "Details",
   icon: Icon,
   // Extensibility: allow passing custom actions to the header
-  customActions = null 
+  customActions = null
 }) {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
@@ -46,7 +47,7 @@ export default function WorkspaceHeader({
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center px-8 justify-between shrink-0 shadow-sm z-10">
-      
+
       {/* Dynamic Title Area */}
       <div className="flex items-center gap-3 w-1/3">
         {Icon && (
@@ -67,9 +68,9 @@ export default function WorkspaceHeader({
       <div className="w-1/3 flex justify-center">
         <div className="relative w-full max-w-md group">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search tasks, teams, or schedules..." 
+          <input
+            type="text"
+            placeholder="Search tasks, teams, or schedules..."
             className="w-full bg-slate-100 border-transparent focus:bg-white border focus:border-emerald-300 rounded-full py-2 pl-10 pr-12 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition-all"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 border border-slate-200 bg-white px-1.5 py-0.5 rounded shadow-sm">
@@ -77,23 +78,23 @@ export default function WorkspaceHeader({
           </span>
         </div>
       </div>
-      
+
       {/* Extensible Right Actions Area */}
       <div className="w-1/3 flex items-center justify-end gap-5">
-        
+
         {/* Inject custom plugin actions if provided, otherwise render defaults */}
         {customActions || (
           <div className="flex items-center gap-3 border-r border-slate-200 pr-5">
-            <button 
+            <button
               onClick={() => setIsFocusMode(!isFocusMode)}
               className={`p-2 rounded-full transition-colors flex items-center gap-2 text-sm font-medium ${isFocusMode ? 'bg-amber-100 text-amber-700' : 'text-slate-500 hover:bg-slate-100'}`}
               title="Focus Mode"
             >
               <Zap size={18} className={isFocusMode ? 'fill-amber-500' : ''} />
             </button>
-            <button 
+            <button
               onClick={() => setIsSettingsModalOpen(true)}
-              className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative" 
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors relative"
               title="User Preferences"
             >
               <Settings size={20} />
@@ -105,6 +106,15 @@ export default function WorkspaceHeader({
           </div>
         )}
 
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+          title="Sign out"
+        >
+          <LogOut size={14} />
+          Sign out
+        </button>
+
         {/* Team Collaboration Module */}
         <div className="flex items-center gap-3">
           <div className="flex -space-x-3">
@@ -112,9 +122,9 @@ export default function WorkspaceHeader({
             <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka" alt="User 2" className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-slate-100" />
             <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white shadow-sm flex items-center justify-center text-slate-600 text-[10px] font-bold ring-1 ring-inset ring-slate-200">+2</div>
           </div>
-          
+
           <div className="relative">
-            <button 
+            <button
               onClick={() => setIsShareMenuOpen(!isShareMenuOpen)}
               className="px-3 py-1.5 text-sm font-bold text-white bg-slate-900 border border-transparent rounded-lg hover:bg-slate-800 shadow-sm transition-all flex items-center gap-2"
             >
@@ -129,7 +139,7 @@ export default function WorkspaceHeader({
                 <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50 animate-in slide-in-from-top-2 fade-in duration-200">
                   <h3 className="font-bold text-slate-900 mb-1">Share Workspace</h3>
                   <p className="text-xs text-slate-500 mb-4">Invite your team members to collaborate.</p>
-                  
+
                   <div className="flex gap-2 mb-4">
                     <input
                       type="email"

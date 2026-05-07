@@ -2,7 +2,10 @@ import GoogleProvider from "next-auth/providers/google";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 
-const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+const GOOGLE_CALENDAR_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/calendar.freebusy",
+];
 
 export const authOptions = {
   providers: [
@@ -11,7 +14,7 @@ export const authOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       authorization: {
         params: {
-          scope: `openid email profile ${GOOGLE_CALENDAR_SCOPE}`,
+          scope: `openid email profile ${GOOGLE_CALENDAR_SCOPES.join(" ")}`,
           access_type: "offline",
           prompt: "consent",
         },

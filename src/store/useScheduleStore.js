@@ -32,6 +32,12 @@ const useScheduleStore = create((set, get) => ({
   /** True while a recalculation (snooze/complete/delete) is in progress. */
   isRecalculating: false,
 
+  /** True while Google Calendar busy blocks are being fetched. */
+  isSyncingGoogleCalendar: false,
+
+  /** True while an app event is being written to Google Calendar. */
+  isWritingGoogleCalendar: false,
+
   /** Error object from the last failed operation, or null. */
   error: null,
 
@@ -55,8 +61,8 @@ const useScheduleStore = create((set, get) => ({
   setTextInput: (value) => set({ textInput: value }),
 
   /** Update dynamic user preferences. */
-  updatePreferences: (newPrefs) => set((state) => ({ 
-    userPreferences: { ...state.userPreferences, ...newPrefs } 
+  updatePreferences: (newPrefs) => set((state) => ({
+    userPreferences: { ...state.userPreferences, ...newPrefs }
   })),
 
   /**
@@ -97,9 +103,12 @@ const useScheduleStore = create((set, get) => ({
 
       if (result.success) {
         set((state) => ({
-          events: overwrite ? result.data : [...state.events, ...result.data],
-          aiParsedTasks: overwrite 
-            ? (result.meta?.ai_tasks || []) 
+          events: overwrite ? result.data : [
+            ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+            ...result.data,
+          ],
+          aiParsedTasks: overwrite
+            ? (result.meta?.ai_tasks || [])
             : [...state.aiParsedTasks, ...(result.meta?.ai_tasks || [])],
         }));
       } else {
@@ -114,6 +123,129 @@ const useScheduleStore = create((set, get) => ({
       });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  /**
+   * Fetches Google Calendar events and renders them as read-only FullCalendar
+   * events. Generated tasks can then visually avoid those blocks.
+   */
+  syncGoogleCalendarBusy: async () => {
+    set({ isSyncingGoogleCalendar: true, error: null });
+
+    try {
+      const response = await fetch("/api/calendar/events");
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const apiError = result.error || {
+          code: "GOOGLE_CALENDAR_SYNC_FAILED",
+          message: "Failed to sync Google Calendar.",
+        };
+        set({ error: apiError });
+        return { success: false, error: apiError };
+      }
+
+      const googleEvents = (result.data?.events || []).map((event, index) => ({
+        id: `gcal_event_${event.id || index}_${event.start}_${event.end}`,
+        title: event.title || "(No title)",
+        start: event.start,
+        end: event.end,
+        backgroundColor: "#94a3b8",
+        borderColor: "#64748b",
+        display: "block",
+        extendedProps: {
+          source: "google_calendar",
+          readOnly: true,
+          google_event_id: event.id,
+          google_link: event.htmlLink,
+          description: event.description
+            ? `<p>${event.description}</p>`
+            : "<p>Imported from Google Calendar.</p>",
+        },
+      }));
+
+      set((state) => ({
+        events: [
+          ...state.events.filter((event) => event.extendedProps?.source !== "google_calendar"),
+          ...googleEvents,
+        ],
+      }));
+
+      return { success: true, busyCount: googleEvents.length };
+    } catch (networkError) {
+      const error = {
+        code: "NETWORK_ERROR",
+        message: networkError.message || "Failed to reach the server.",
+      };
+      set({ error });
+      return { success: false, error };
+    } finally {
+      set({ isSyncingGoogleCalendar: false });
+    }
+  },
+
+  /**
+   * Writes a scheduled app event to the signed-in user's primary Google Calendar.
+   * @param {Object} event - FullCalendar EventApi or compatible event object.
+   */
+  addEventToGoogleCalendar: async (event) => {
+    set({ isWritingGoogleCalendar: true, error: null });
+
+    const start = event.start instanceof Date ? event.start.toISOString() : event.start;
+    const end = event.end instanceof Date ? event.end.toISOString() : event.end;
+
+    try {
+      const response = await fetch("/api/calendar/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: event.title,
+          description: event.extendedProps?.description || "",
+          start,
+          end,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const apiError = result.error || {
+          code: "GOOGLE_CALENDAR_WRITE_FAILED",
+          message: "Failed to add event to Google Calendar.",
+        };
+        set({ error: apiError });
+        return { success: false, error: apiError };
+      }
+
+      const createdEvent = result.data?.event;
+
+      set((state) => ({
+        events: state.events.map((existingEvent) => {
+          if (existingEvent.id !== event.id) return existingEvent;
+
+          return {
+            ...existingEvent,
+            extendedProps: {
+              ...existingEvent.extendedProps,
+              exported_to_google_calendar: true,
+              google_event_id: createdEvent?.id,
+              google_link: createdEvent?.htmlLink,
+            },
+          };
+        }),
+      }));
+
+      return { success: true, event: createdEvent };
+    } catch (networkError) {
+      const error = {
+        code: "NETWORK_ERROR",
+        message: networkError.message || "Failed to reach the server.",
+      };
+      set({ error });
+      return { success: false, error };
+    } finally {
+      set({ isWritingGoogleCalendar: false });
     }
   },
 

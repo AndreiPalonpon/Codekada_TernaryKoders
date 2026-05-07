@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Bell, Settings, Plus, FolderKanban, CalendarDays, MoreVertical, LayoutGrid, List } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { Search, Bell, Settings, Plus, FolderKanban, CalendarDays, MoreVertical, LayoutGrid, List, LogOut } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
 import useWorkspaceStore from "@/store/useWorkspaceStore";
 
 const renderIcon = (iconName, props) => {
@@ -66,6 +66,13 @@ export default function EnvironmentPicker() {
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
           </button>
           <button className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"><Settings size={20} /></button>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="px-3 py-1.5 text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200 hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+          >
+            <LogOut size={14} />
+            Sign out
+          </button>
           <div className="flex items-center gap-2 cursor-pointer group">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm shadow-sm border-2 border-white ml-2 overflow-hidden hover:shadow-md transition-shadow">
               {session?.user?.image ? (

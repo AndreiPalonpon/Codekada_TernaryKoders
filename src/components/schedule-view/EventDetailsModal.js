@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, CheckCircle, Edit, Trash2, Clock, User, Activity, AlarmClock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, CheckCircle, Edit, Trash2, Clock, User, Activity, AlarmClock, CalendarPlus } from "lucide-react";
 import useScheduleStore from "../../store/useScheduleStore";
 
 /**
@@ -15,25 +15,52 @@ export default function EventDetailsModal({ event, onClose }) {
   const markTaskComplete = useScheduleStore((state) => state.markTaskComplete);
   const deleteTask = useScheduleStore((state) => state.deleteTask);
   const snoozeTask = useScheduleStore((state) => state.snoozeTask);
+  const addEventToGoogleCalendar = useScheduleStore((state) => state.addEventToGoogleCalendar);
   const isRecalculating = useScheduleStore((state) => state.isRecalculating);
+  const isWritingGoogleCalendar = useScheduleStore((state) => state.isWritingGoogleCalendar);
 
   const [snoozeMinutes, setSnoozeMinutes] = useState(30);
+  const [createdGoogleEvent, setCreatedGoogleEvent] = useState(null);
+
+  useEffect(() => {
+    setCreatedGoogleEvent(null);
+  }, [event?.id]);
 
   if (!event) return null;
 
+  const isReadOnly = event.extendedProps?.readOnly;
+  const isExportedToGoogleCalendar = Boolean(
+    event.extendedProps?.google_event_id || createdGoogleEvent?.id
+  );
+
   const handleComplete = () => {
+    if (isReadOnly) return;
     markTaskComplete(event.id);
     onClose();
   };
 
   const handleDelete = () => {
+    if (isReadOnly) return;
     deleteTask(event.id);
     onClose();
   };
 
   const handleSnooze = () => {
+    if (isReadOnly) return;
     snoozeTask(event.id, snoozeMinutes);
     onClose();
+  };
+
+  const handleAddToGoogleCalendar = async () => {
+    if (isReadOnly || isExportedToGoogleCalendar) return;
+
+    const result = await addEventToGoogleCalendar(event);
+    if (!result.success) {
+      alert(result.error?.message || "Failed to add event to Google Calendar.");
+      return;
+    }
+
+    setCreatedGoogleEvent(result.event);
   };
 
   return (
@@ -102,55 +129,78 @@ export default function EventDetailsModal({ event, onClose }) {
             </div>
           </div>
 
-          {/* Snooze Control */}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <p className="text-xs text-amber-700 uppercase font-bold tracking-wider mb-2 flex items-center gap-1.5">
-              <AlarmClock size={14} /> Snooze Task
-            </p>
-            <div className="flex items-center gap-3">
-              <select
-                value={snoozeMinutes}
-                onChange={(e) => setSnoozeMinutes(Number(e.target.value))}
-                className="text-sm px-3 py-2 border border-amber-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
-              >
-                <option value={15}>15 minutes</option>
-                <option value={30}>30 minutes</option>
-                <option value={60}>1 hour</option>
-                <option value={120}>2 hours</option>
-              </select>
-              <button
-                onClick={handleSnooze}
-                disabled={isRecalculating}
-                className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isRecalculating ? "Snoozing..." : "Snooze"}
-              </button>
+          {!isReadOnly && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <p className="text-xs text-amber-700 uppercase font-bold tracking-wider mb-2 flex items-center gap-1.5">
+                <AlarmClock size={14} /> Snooze Task
+              </p>
+              <div className="flex items-center gap-3">
+                <select
+                  value={snoozeMinutes}
+                  onChange={(e) => setSnoozeMinutes(Number(e.target.value))}
+                  className="text-sm px-3 py-2 border border-amber-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                >
+                  <option value={15}>15 minutes</option>
+                  <option value={30}>30 minutes</option>
+                  <option value={60}>1 hour</option>
+                  <option value={120}>2 hours</option>
+                </select>
+                <button
+                  onClick={handleSnooze}
+                  disabled={isRecalculating}
+                  className="px-4 py-2 text-sm font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isRecalculating ? "Snoozing..." : "Snooze"}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         {/* Footer */}
         <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between shrink-0">
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            <Trash2 size={16} /> Delete
-          </button>
+          {!isReadOnly ? (
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 size={16} /> Delete
+            </button>
+          ) : (
+            <span className="px-4 py-2 text-sm font-medium text-slate-500">
+              Read-only calendar block
+            </span>
+          )}
           <div className="flex gap-2">
+            {!isReadOnly && (
+              <button
+                onClick={handleAddToGoogleCalendar}
+                disabled={isWritingGoogleCalendar || isExportedToGoogleCalendar}
+                className="px-4 py-2 text-sm font-medium text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 shadow-sm rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CalendarPlus size={16} />
+                {isWritingGoogleCalendar
+                  ? "Adding..."
+                  : isExportedToGoogleCalendar
+                    ? "Added to Google"
+                    : "Add to Google"}
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm rounded-lg transition-colors flex items-center gap-1.5"
             >
               <Edit size={16} /> Close
             </button>
-            <button
-              onClick={handleComplete}
-              disabled={isRecalculating}
-              className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <CheckCircle size={16} /> Complete
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={handleComplete}
+                disabled={isRecalculating}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-600/20 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <CheckCircle size={16} /> Complete
+              </button>
+            )}
           </div>
         </div>
       </div>

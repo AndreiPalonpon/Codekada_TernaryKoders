@@ -225,6 +225,7 @@ Synkrohan is proudly developed and maintained by **Ternary Koders** for the Code
 
 - **Andrei Palonpon** - _Lead Developer_ - [GitHub](https://github.com/AndreiPalonpon) - [Email](mailto:andrei_palonpon@dlsu.edu.ph)
 - **Jedidiah Julian** - _Backend Developer_
+- **Gabriel Ponce** - _Backend Developer_ - [Github](https://github.com/pncegabby) - [Email](contactgabrielponce@gmail.com)
 
 ---
 
